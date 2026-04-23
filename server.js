@@ -343,18 +343,22 @@ body{background:#0f0720;font-family:Georgia,'Times New Roman',serif;min-height:1
 
 /* Envelope */
 .scene{perspective:1200px;width:100%;max-width:500px;padding:60px 20px}
-.envelope{position:relative;width:100%;background:#f0e8d8;border-radius:4px;box-shadow:0 24px 64px rgba(0,0,0,.7);min-height:280px;overflow:visible}
-.env-body{width:100%;height:280px;background:#f0e8d8;border-radius:4px;position:relative;overflow:hidden}
+/* isolation:isolate ensures all children share one stacking context */
+.envelope{position:relative;width:100%;background:#f0e8d8;border-radius:4px;box-shadow:0 24px 64px rgba(0,0,0,.7);min-height:280px;overflow:visible;isolation:isolate}
+.env-body{width:100%;height:280px;background:#f0e8d8;border-radius:4px;position:relative;z-index:1;overflow:hidden}
 .fold-l{position:absolute;top:0;bottom:0;left:0;width:50%;background:#e8dece;clip-path:polygon(0 0,100% 45%,0 100%)}
 .fold-r{position:absolute;top:0;bottom:0;right:0;width:50%;background:#e0d8c4;clip-path:polygon(0 45%,100% 0,100% 100%)}
 .fold-b{position:absolute;bottom:0;left:0;right:0;height:55%;background:#d8d0bc;clip-path:polygon(0 100%,50% 0%,100% 100%)}
-.flap{position:absolute;top:0;left:0;right:0;height:50%;background:#ece4d4;clip-path:polygon(0 0,50% 100%,100% 0);transform-origin:top center;transform:rotateX(0deg);transition:transform 1.2s cubic-bezier(.4,0,.2,1);z-index:10;will-change:transform}
-.envelope.open .flap{transform:rotateX(-180deg)}
-.card-wrap{position:absolute;bottom:8px;left:28px;right:28px;z-index:5;transform:translateY(0);opacity:0;transition:transform 1.2s cubic-bezier(.4,0,.2,1) 0.3s,opacity 0.4s 0.3s}
-.envelope.open .card-wrap{transform:translateY(-200px);opacity:1}
-.mini-card{background:#fff;border-radius:6px;padding:20px 24px;box-shadow:0 4px 20px rgba(0,0,0,.15);text-align:center}
-.mini-card .eyebrow{font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#888;margin-bottom:8px}
-.mini-card h2{color:#2D1B69;font-size:19px;margin-bottom:4px}
+/* card-wrap sits between env-body (z:1) and flap (z:20); after open, flap drops to z:1 */
+.flap{position:absolute;top:0;left:0;right:0;height:50%;background:#ece4d4;clip-path:polygon(0 0,50% 100%,100% 0);transform-origin:top center;transform:rotateX(0deg);transition:transform 1.2s cubic-bezier(.4,0,.2,1);z-index:20;will-change:transform}
+.envelope.open .flap{transform:rotateX(-180deg);z-index:1}
+.card-wrap{position:absolute;bottom:0;left:20px;right:20px;z-index:15;transform:translateY(30px);opacity:0;transition:transform 1.1s cubic-bezier(.3,0,.2,1) 0.5s,opacity 0.35s 0.5s}
+.envelope.open .card-wrap{transform:translateY(-220px);opacity:1}
+.mini-card{background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.25);text-align:center}
+.mini-card-hero{width:100%;height:100px;object-fit:cover;display:block;background:linear-gradient(135deg,#2D1B69,#7C3AED)}
+.mini-card-body{padding:16px 20px 20px}
+.mini-card .eyebrow{font-size:10px;letter-spacing:3px;text-transform:uppercase;color:#999;margin-bottom:6px}
+.mini-card h2{color:#2D1B69;font-size:18px;margin-bottom:4px;line-height:1.3}
 .mini-card .date{color:#666;font-size:13px}
 
 /* Full page */
@@ -409,9 +413,14 @@ body{background:#0f0720;font-family:Georgia,'Times New Roman',serif;min-height:1
     <div class="flap"></div>
     <div class="card-wrap">
       <div class="mini-card">
-        <div class="eyebrow">You are invited</div>
-        <h2>${esc(event.name)}</h2>
-        <div class="date">${fmtDate(event.event_date)}</div>
+        ${event.hero_image_url
+          ? `<img class="mini-card-hero" src="${esc(event.hero_image_url)}" alt="">`
+          : `<div class="mini-card-hero"></div>`}
+        <div class="mini-card-body">
+          <div class="eyebrow">You are invited</div>
+          <h2>${esc(event.name)}</h2>
+          <div class="date">${fmtDate(event.event_date)}</div>
+        </div>
       </div>
     </div>
   </div>
