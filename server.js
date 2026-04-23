@@ -404,6 +404,29 @@ h1,h2,h3,.mini-card h2{font-family:'Playfair Display',Georgia,serif}
 .map-wrap{border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.08);margin-bottom:40px}
 .map-wrap iframe{width:100%;height:240px;border:none;display:block}
 .closed-msg{text-align:center;color:#888;padding:16px;font-size:15px}
+
+/* Attendance type selector */
+.attend-type-wrap{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:4px}
+.attend-type-card{position:relative}
+.attend-type-card input[type=radio]{position:absolute;opacity:0;width:0;height:0}
+.attend-type-label{display:flex;flex-direction:column;align-items:center;gap:8px;padding:20px 12px 16px;border:2px solid #e5e7eb;border-radius:12px;cursor:pointer;text-align:center;transition:border-color .2s,background .2s,box-shadow .2s;background:#fafafa}
+.attend-type-label:hover{border-color:#c4b5fd;background:#fff;box-shadow:0 4px 16px rgba(124,58,237,.1)}
+.attend-type-icon{width:44px;height:44px;border-radius:50%;background:#f3f4f6;display:flex;align-items:center;justify-content:center;transition:background .2s}
+.attend-type-icon svg{width:22px;height:22px}
+.attend-type-name{font-family:'Playfair Display',Georgia,serif;font-size:15px;font-weight:700;color:#1f2937;line-height:1.2}
+.attend-type-sub{font-size:12px;color:#9ca3af;line-height:1.3}
+.attend-type-dot{width:8px;height:8px;border-radius:50%;border:2px solid #d1d5db;margin-top:2px;transition:background .2s,border-color .2s}
+.attend-type-card.is-inperson input:checked ~ .attend-type-label{border-color:#059669;background:#f0fdf4;box-shadow:0 4px 16px rgba(5,150,105,.12)}
+.attend-type-card.is-inperson input:checked ~ .attend-type-label .attend-type-icon{background:#d1fae5}
+.attend-type-card.is-inperson input:checked ~ .attend-type-label .attend-type-icon svg{color:#059669}
+.attend-type-card.is-inperson input:checked ~ .attend-type-label .attend-type-name{color:#065f46}
+.attend-type-card.is-inperson input:checked ~ .attend-type-label .attend-type-dot{background:#059669;border-color:#059669}
+.attend-type-card.is-online input:checked ~ .attend-type-label{border-color:#7c3aed;background:#faf5ff;box-shadow:0 4px 16px rgba(124,58,237,.12)}
+.attend-type-card.is-online input:checked ~ .attend-type-label .attend-type-icon{background:#ede9fe}
+.attend-type-card.is-online input:checked ~ .attend-type-label .attend-type-icon svg{color:#7c3aed}
+.attend-type-card.is-online input:checked ~ .attend-type-label .attend-type-name{color:#5b21b6}
+.attend-type-card.is-online input:checked ~ .attend-type-label .attend-type-dot{background:#7c3aed;border-color:#7c3aed}
+
 @media(max-width:480px){.card,.rsvp-section,.cal-section{padding:20px}.attend-btns{flex-direction:column}}
 </style>
 </head>
@@ -457,15 +480,31 @@ h1,h2,h3,.mini-card h2{font-family:'Playfair Display',Georgia,serif}
       <input type="hidden" id="si" name="status" value="${eventGuest.status||''}">
       <div class="form-fields${eventGuest.status==='accepted'?' vis':''}" id="ff">
         ${event.allow_online ? `
-        <div class="fg" style="margin-bottom:18px">
-          <label>How will you attend?</label>
-          <div style="display:flex;gap:10px;margin-top:6px">
-            <label style="flex:1;display:flex;align-items:center;gap:8px;padding:12px 14px;border:2px solid ${eventGuest.attendance_type!=='online'?'#059669':'#ddd'};border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">
-              <input type="radio" name="attendance_type" value="in-person" ${eventGuest.attendance_type!=='online'?'checked':''} onchange="updateAttendanceType()"> 📍 In person
-            </label>
-            <label style="flex:1;display:flex;align-items:center;gap:8px;padding:12px 14px;border:2px solid ${eventGuest.attendance_type==='online'?'#7C3AED':'#ddd'};border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">
-              <input type="radio" name="attendance_type" value="online" ${eventGuest.attendance_type==='online'?'checked':''} onchange="updateAttendanceType()"> 💻 Online
-            </label>
+        <div class="fg" style="margin-bottom:20px">
+          <label style="margin-bottom:12px">How will you attend?</label>
+          <div class="attend-type-wrap">
+            <div class="attend-type-card is-inperson">
+              <input type="radio" id="att_ip" name="attendance_type" value="in-person" ${eventGuest.attendance_type!=='online'?'checked':''}>
+              <label class="attend-type-label" for="att_ip">
+                <span class="attend-type-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
+                </span>
+                <span class="attend-type-name">In person</span>
+                <span class="attend-type-sub">${event.venue_name ? esc(event.venue_name) : 'At the venue'}</span>
+                <span class="attend-type-dot"></span>
+              </label>
+            </div>
+            <div class="attend-type-card is-online">
+              <input type="radio" id="att_on" name="attendance_type" value="online" ${eventGuest.attendance_type==='online'?'checked':''}>
+              <label class="attend-type-label" for="att_on">
+                <span class="attend-type-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                </span>
+                <span class="attend-type-name">Online</span>
+                <span class="attend-type-sub">Join via link</span>
+                <span class="attend-type-dot"></span>
+              </label>
+            </div>
           </div>
         </div>` : ''}
         ${event.allow_plus_one?`<div class="fg"><label>Plus one name (optional)</label><input type="text" name="plus_one_name" value="${esc(eventGuest.plus_one_name||'')}"></div>`:''}
@@ -499,12 +538,6 @@ function pick(s){
   document.querySelector('.btn-yes').classList.toggle('on',s==='accepted');
   document.querySelector('.btn-no').classList.toggle('on',s==='declined');
   document.getElementById('ff').classList.toggle('vis',s==='accepted');
-}
-function updateAttendanceType(){
-  const radios=document.querySelectorAll('[name="attendance_type"]');
-  radios.forEach(r=>{
-    r.closest('label').style.borderColor=r.checked?(r.value==='online'?'#7C3AED':'#059669'):'#ddd';
-  });
 }
 async function doSubmit(e){
   e.preventDefault();
