@@ -62,6 +62,20 @@ a{color:inherit;text-decoration:none}
 .card-head h2{font-size:15px;font-weight:700;color:var(--pri)}
 .card-body{padding:20px}
 
+/* Venue grid */
+.venue-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:18px;margin-bottom:24px}
+.venue-card{background:#fff;border-radius:12px;border:1px solid var(--border);padding:20px 22px;cursor:pointer;transition:all .15s;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.venue-card:hover{border-color:var(--acc);box-shadow:0 4px 16px rgba(124,58,237,.1);transform:translateY(-1px)}
+.venue-card-name{font-family:'Playfair Display',Georgia,serif;font-size:16px;font-weight:700;color:var(--pri);margin-bottom:4px}
+.venue-card-meta{font-size:13px;color:var(--muted);line-height:1.6}
+.venue-card-stats{display:flex;gap:12px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
+.venue-card-stat{font-size:12px;color:var(--muted)}.venue-card-stat strong{color:var(--text);font-size:13px}
+
+/* Venue picker in event form */
+.venue-picker-wrap{background:#f5f3ff;border:1.5px solid #e0d9f5;border-radius:8px;padding:14px;margin-bottom:4px}
+.venue-picker-wrap label{display:block;font-size:12px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px}
+.venue-picker-wrap select{width:100%;padding:10px 14px;border:1.5px solid #d1d5db;border-radius:6px;font-size:14px;font-family:inherit;background:#fff}
+
 /* Stats grid */
 .stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px;margin-bottom:24px}
 .stat-card{background:#fff;border-radius:10px;padding:18px 20px;border:1px solid var(--border);box-shadow:0 1px 3px rgba(0,0,0,.05)}
@@ -194,6 +208,7 @@ tr:hover td{background:#fafafa}
     <div class="nav-tabs">
       <div class="nav-tab active" onclick="showView('events')">Events</div>
       <div class="nav-tab" onclick="showView('guests')">Guest Database</div>
+      <div class="nav-tab" onclick="showView('venues')">Venues</div>
     </div>
     <div class="nav-right">
       <span class="nav-user" id="navUser"></span>
@@ -248,10 +263,18 @@ tr:hover td{background:#fafafa}
                 <select id="evStatus"><option value="draft">Draft</option><option value="active">Active</option><option value="closed">Closed</option></select></div>
               <div class="fg"><label>Start Date & Time *</label><input id="evDate" type="datetime-local"></div>
               <div class="fg"><label>End Date & Time</label><input id="evEndDate" type="datetime-local"></div>
+              <div class="fg span2 venue-picker-wrap">
+                <label>Venue <span style="font-weight:400;color:#9ca3af;text-transform:none;letter-spacing:0">(choose from database, or fill fields manually below)</span></label>
+                <select id="evVenueId" onchange="applyVenueSelection()">
+                  <option value="">— Enter manually —</option>
+                </select>
+              </div>
               <div class="fg"><label>Venue Name</label><input id="evVenueName" type="text"></div>
-              <div class="fg"><label>Venue Address</label><input id="evVenueAddr" type="text"><small>Used for Google Maps embed</small></div>
-              <div class="fg"><label>Venue Lat</label><input id="evLat" type="number" step="any" placeholder="51.5074"></div>
-              <div class="fg"><label>Venue Lng</label><input id="evLng" type="number" step="any" placeholder="-0.1278"></div>
+              <div class="fg"><label>Room / Area</label><input id="evVenueRoom" type="text" placeholder="Optional specific room"></div>
+              <div class="fg span2"><label>Venue Address</label><input id="evVenueAddr" type="text"><small>Used for Google Maps embed</small></div>
+              <div class="fg"><label>Venue Lat</label><input id="evLat" type="number" step="any" placeholder="55.9533"></div>
+              <div class="fg"><label>Venue Lng</label><input id="evLng" type="number" step="any" placeholder="-3.1883"></div>
+              <div class="fg"><label>Hire Cost <span style="font-weight:400;color:var(--muted)">(for this event)</span></label><input id="evHireCost" type="text" placeholder="£2,500"></div>
               <div class="fg">
                 <label>Hero Image <span style="font-weight:400;color:var(--muted)">(1200 × 480px)</span></label>
                 <div class="hero-input-wrap">
@@ -389,6 +412,68 @@ tr:hover td{background:#fafafa}
         </div>
       </div>
     </div>
+    <!-- Venues list view -->
+    <div class="view" id="viewVenues">
+      <div class="page-head">
+        <h1>Venues</h1>
+        <div class="page-head-right">
+          <button class="btn btn-pri" onclick="openCreateVenue()">+ New Venue</button>
+        </div>
+      </div>
+      <div class="venue-grid" id="venueGrid">
+        <div style="color:var(--muted);padding:20px">Loading…</div>
+      </div>
+    </div>
+
+    <!-- Venue detail view -->
+    <div class="view" id="viewVenue">
+      <div class="page-head">
+        <div style="display:flex;align-items:center;gap:12px">
+          <button class="btn btn-sec btn-sm" onclick="showView('venues')">← Back</button>
+          <h1 id="venueDetailName">Venue</h1>
+        </div>
+        <div class="page-head-right">
+          <button class="btn btn-err btn-sm" onclick="deleteCurrentVenue()">Delete Venue</button>
+        </div>
+      </div>
+      <div class="tabs">
+        <div class="tab active" onclick="showTab('vTabDetails',this)">Details</div>
+        <div class="tab" onclick="showTab('vTabHistory',this);loadVenueHistory()">Event History</div>
+      </div>
+
+      <!-- Details tab -->
+      <div class="tab-pane active" id="vTabDetails">
+        <div class="card">
+          <div class="card-head"><h2>Venue Details</h2><button class="btn btn-pri btn-sm" onclick="saveVenueDetails()">Save Changes</button></div>
+          <div class="card-body">
+            <div class="form-grid">
+              <div class="fg span2"><label>Venue Name *</label><input id="vName" type="text" placeholder="The Assembly Rooms"></div>
+              <div class="fg span2"><label>Address</label><input id="vAddress" type="text" placeholder="54 George Street, Edinburgh EH2 2LR"></div>
+              <div class="fg"><label>Room / Area <span style="font-weight:400;color:var(--muted)">(optional)</span></label><input id="vRoom" type="text" placeholder="The Music Hall, Studio 3…"></div>
+              <div class="fg"><label>Hire Price <span style="font-weight:400;color:var(--muted)">(standard rate)</span></label><input id="vHirePrice" type="text" placeholder="£2,500 / half day"></div>
+              <div class="fg"><label>Geo Lat <span style="font-weight:400;color:var(--muted)">(overrides address for maps)</span></label><input id="vLat" type="number" step="any" placeholder="55.9533"></div>
+              <div class="fg"><label>Geo Lng</label><input id="vLng" type="number" step="any" placeholder="-3.1883"></div>
+              <div class="fg"><label>Contact Name</label><input id="vContactName" type="text" placeholder="Jane Smith"></div>
+              <div class="fg"><label>Contact Email</label><input id="vContactEmail" type="email" placeholder="events@venue.com"></div>
+              <div class="fg span2"><label>Contact Phone</label><input id="vPhone" type="tel" placeholder="+44 131 123 4567"></div>
+              <div class="fg span2"><label>Accessibility Information</label><textarea id="vAccessibility" rows="4" placeholder="Step-free access via main entrance, accessible toilets on ground floor, hearing loop available…"></textarea></div>
+              <div class="fg span2"><label>Internal Notes</label><textarea id="vNotes" rows="3" placeholder="Parking nearby, catering contacts, setup requirements…"></textarea></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- History tab -->
+      <div class="tab-pane" id="vTabHistory">
+        <div class="card">
+          <div class="card-head"><h2>Event History</h2><span style="font-size:12px;color:var(--muted)">All events held at this venue</span></div>
+          <div class="card-body" id="venueHistoryBody">
+            <p style="color:var(--muted);font-size:13px">Loading…</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div><!-- /page-content -->
 </div><!-- /app -->
 
@@ -467,10 +552,11 @@ function showView(name) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
   document.getElementById('view' + name.charAt(0).toUpperCase() + name.slice(1)).classList.add('active');
-  const tabs = { events: 0, guests: 1 };
+  const tabs = { events: 0, guests: 1, venues: 2, venue: 2 };
   const idx = tabs[name];
   if (idx !== undefined) document.querySelectorAll('.nav-tab')[idx]?.classList.add('active');
   if (name === 'guests') loadMasterGuests();
+  if (name === 'venues') loadVenues();
 }
 
 function showTab(tabId, el) {
@@ -537,10 +623,14 @@ async function openEvent(id) {
   document.getElementById('evStatus').value = ev.status || 'draft';
   document.getElementById('evDate').value = ev.event_date ? ev.event_date.slice(0,16) : '';
   document.getElementById('evEndDate').value = ev.end_date ? ev.end_date.slice(0,16) : '';
+  await populateVenuePicker(ev.venue_id);
+  document.getElementById('evVenueId').value = ev.venue_id || '';
   document.getElementById('evVenueName').value = ev.venue_name || '';
+  document.getElementById('evVenueRoom').value = ev.venue_room || '';
   document.getElementById('evVenueAddr').value = ev.venue_address || '';
   document.getElementById('evLat').value = ev.venue_lat || '';
   document.getElementById('evLng').value = ev.venue_lng || '';
+  document.getElementById('evHireCost').value = ev.hire_cost || '';
   document.getElementById('evHero').value = ev.hero_image_url || '';
   updateHeroPreview();
   document.getElementById('evDress').value = ev.dress_code || '';
@@ -622,10 +712,13 @@ async function saveEventDetails() {
     name: document.getElementById('evName').value,
     event_date: document.getElementById('evDate').value,
     end_date: document.getElementById('evEndDate').value || null,
+    venue_id: document.getElementById('evVenueId').value || null,
     venue_name: document.getElementById('evVenueName').value,
+    venue_room: document.getElementById('evVenueRoom').value || null,
     venue_address: document.getElementById('evVenueAddr').value,
     venue_lat: document.getElementById('evLat').value || null,
     venue_lng: document.getElementById('evLng').value || null,
+    hire_cost: document.getElementById('evHireCost').value || null,
     hero_image_url: document.getElementById('evHero').value,
     dress_code: document.getElementById('evDress').value,
     rsvp_deadline: document.getElementById('evDeadline').value || null,
@@ -1157,6 +1250,158 @@ function escH(s) {
 function fmtDate(d) {
   if (!d) return '';
   return new Date(d).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
+}
+
+// ── Venues ─────────────────────────────────────────────────────────────────
+let currentVenueId = null;
+let allVenues = [];
+
+async function loadVenues() {
+  const grid = document.getElementById('venueGrid');
+  grid.innerHTML = '<div style="color:var(--muted);padding:20px">Loading…</div>';
+  const venues = await apiFetch('/api/venues');
+  if (!venues) return;
+  allVenues = venues;
+  if (!venues.length) {
+    grid.innerHTML = '<div style="color:var(--muted);padding:20px">No venues yet. Add your first venue.</div>';
+    return;
+  }
+  grid.innerHTML = venues.map(v => `
+    <div class="venue-card" onclick="openVenue(${v.id})">
+      <div class="venue-card-name">${escH(v.name)}</div>
+      <div class="venue-card-meta">
+        ${v.address ? '📍 ' + escH(v.address) : ''}
+        ${v.room ? '<br>🚪 ' + escH(v.room) : ''}
+        ${v.contact_name ? '<br>👤 ' + escH(v.contact_name) : ''}
+        ${v.hire_price ? '<br>💷 ' + escH(v.hire_price) : ''}
+      </div>
+      <div class="venue-card-stats">
+        <div class="venue-card-stat"><strong>${v.event_count||0}</strong> events</div>
+      </div>
+    </div>`).join('');
+}
+
+async function openVenue(id) {
+  currentVenueId = id;
+  showView('venue');
+  document.querySelectorAll('#viewVenue .tab').forEach((t,i) => t.classList.toggle('active', i===0));
+  document.querySelectorAll('#viewVenue .tab-pane').forEach((p,i) => p.classList.toggle('active', i===0));
+  const v = await apiFetch(`/api/venues/${id}`);
+  if (!v) return;
+  document.getElementById('venueDetailName').textContent = v.name;
+  document.getElementById('vName').value = v.name || '';
+  document.getElementById('vAddress').value = v.address || '';
+  document.getElementById('vRoom').value = v.room || '';
+  document.getElementById('vHirePrice').value = v.hire_price || '';
+  document.getElementById('vLat').value = v.venue_lat || '';
+  document.getElementById('vLng').value = v.venue_lng || '';
+  document.getElementById('vContactName').value = v.contact_name || '';
+  document.getElementById('vContactEmail').value = v.contact_email || '';
+  document.getElementById('vPhone').value = v.phone || '';
+  document.getElementById('vAccessibility').value = v.accessibility_info || '';
+  document.getElementById('vNotes').value = v.notes || '';
+}
+
+async function saveVenueDetails() {
+  const body = {
+    name: document.getElementById('vName').value,
+    address: document.getElementById('vAddress').value,
+    room: document.getElementById('vRoom').value || null,
+    hire_price: document.getElementById('vHirePrice').value || null,
+    venue_lat: document.getElementById('vLat').value || null,
+    venue_lng: document.getElementById('vLng').value || null,
+    contact_name: document.getElementById('vContactName').value || null,
+    contact_email: document.getElementById('vContactEmail').value || null,
+    phone: document.getElementById('vPhone').value || null,
+    accessibility_info: document.getElementById('vAccessibility').value || null,
+    notes: document.getElementById('vNotes').value || null,
+  };
+  if (!body.name) { toast('Venue name required', 'err'); return; }
+  const r = await apiFetch(`/api/venues/${currentVenueId}`, { method:'PUT', body });
+  if (r) { toast('Venue saved', 'ok'); document.getElementById('venueDetailName').textContent = r.name; allVenues = []; }
+}
+
+async function deleteCurrentVenue() {
+  if (!confirm('Delete this venue? Events linked to it will be unlinked but not deleted.')) return;
+  const r = await apiFetch(`/api/venues/${currentVenueId}`, { method:'DELETE' });
+  if (r) { toast('Venue deleted', 'ok'); showView('venues'); }
+}
+
+async function loadVenueHistory() {
+  const body = document.getElementById('venueHistoryBody');
+  body.innerHTML = '<p style="color:var(--muted);font-size:13px">Loading…</p>';
+  const rows = await apiFetch(`/api/venues/${currentVenueId}/history`);
+  if (!rows) return;
+  if (!rows.length) {
+    body.innerHTML = '<p style="color:var(--muted);font-size:13px">No events have been held at this venue yet.</p>';
+    return;
+  }
+  body.innerHTML = `<div class="tbl-wrap"><table>
+    <thead><tr><th>Event</th><th>Date</th><th>Guests</th><th>Accepted</th><th>Hire Cost</th><th>Status</th></tr></thead>
+    <tbody>${rows.map(r => `<tr>
+      <td><strong>${escH(r.name)}</strong></td>
+      <td>${fmtDate(r.event_date)}</td>
+      <td>${r.total_guests||0}</td>
+      <td>${r.accepted||0}</td>
+      <td>${r.hire_cost ? escH(r.hire_cost) : '<span style="color:var(--muted)">—</span>'}</td>
+      <td><span class="badge badge-${r.status}">${r.status}</span></td>
+    </tr>`).join('')}</tbody>
+  </table></div>`;
+}
+
+function openCreateVenue() {
+  showModal('New Venue', `
+    <div class="form-grid">
+      <div class="fg span2"><label>Venue Name *</label><input id="newVName" type="text" placeholder="The Assembly Rooms"></div>
+      <div class="fg span2"><label>Address</label><input id="newVAddress" type="text" placeholder="54 George Street, Edinburgh"></div>
+      <div class="fg"><label>Room / Area</label><input id="newVRoom" type="text" placeholder="The Music Hall"></div>
+      <div class="fg"><label>Hire Price</label><input id="newVHirePrice" type="text" placeholder="£2,500 / day"></div>
+      <div class="fg"><label>Contact Name</label><input id="newVContactName" type="text"></div>
+      <div class="fg"><label>Contact Email</label><input id="newVContactEmail" type="email"></div>
+      <div class="fg span2"><label>Contact Phone</label><input id="newVPhone" type="tel"></div>
+    </div>`,
+    [{label:'Cancel',fn:'closeModal',cls:'btn-sec'},{label:'Create Venue',fn:'doCreateVenue()',cls:'btn-pri'}]);
+}
+
+async function doCreateVenue() {
+  const body = {
+    name: document.getElementById('newVName').value.trim(),
+    address: document.getElementById('newVAddress').value.trim() || null,
+    room: document.getElementById('newVRoom').value.trim() || null,
+    hire_price: document.getElementById('newVHirePrice').value.trim() || null,
+    contact_name: document.getElementById('newVContactName').value.trim() || null,
+    contact_email: document.getElementById('newVContactEmail').value.trim() || null,
+    phone: document.getElementById('newVPhone').value.trim() || null,
+  };
+  if (!body.name) { toast('Venue name required','err'); return; }
+  const r = await apiFetch('/api/venues', { method:'POST', body });
+  if (r) { closeModal(); toast('Venue created','ok'); openVenue(r.id); }
+}
+
+// Populate venue picker in event form
+async function populateVenuePicker(selectedId) {
+  const sel = document.getElementById('evVenueId');
+  if (!sel) return;
+  if (!allVenues.length) {
+    const v = await apiFetch('/api/venues');
+    if (v) allVenues = v;
+  }
+  sel.innerHTML = '<option value="">— Enter manually —</option>' +
+    allVenues.map(v => `<option value="${v.id}"${String(v.id)===String(selectedId)?' selected':''}>${escH(v.name)}${v.room?' — '+escH(v.room):''}</option>`).join('');
+}
+
+function applyVenueSelection() {
+  const id = document.getElementById('evVenueId').value;
+  if (!id) return;
+  const v = allVenues.find(x => String(x.id) === String(id));
+  if (!v) return;
+  document.getElementById('evVenueName').value = v.name || '';
+  document.getElementById('evVenueRoom').value = v.room || '';
+  document.getElementById('evVenueAddr').value = v.address || '';
+  document.getElementById('evLat').value = v.venue_lat || '';
+  document.getElementById('evLng').value = v.venue_lng || '';
+  if (v.accessibility_info) document.getElementById('evAccessibility').value = v.accessibility_info;
+  if (v.hire_price) document.getElementById('evHireCost').value = v.hire_price;
 }
 </script>
 </body>

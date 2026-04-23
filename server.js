@@ -99,6 +99,23 @@ async function migrate() {
         sort_order INTEGER DEFAULT 0
       );
 
+      CREATE TABLE IF NOT EXISTS venues (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        address TEXT,
+        room TEXT,
+        venue_lat FLOAT,
+        venue_lng FLOAT,
+        phone TEXT,
+        contact_name TEXT,
+        contact_email TEXT,
+        hire_price TEXT,
+        accessibility_info TEXT,
+        notes TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
       CREATE TABLE IF NOT EXISTS rsvp_answers (
         id SERIAL PRIMARY KEY,
         event_guest_id INTEGER REFERENCES event_guests(id) ON DELETE CASCADE,
@@ -114,6 +131,9 @@ async function migrate() {
     await client.query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS allow_online BOOLEAN DEFAULT false`);
     await client.query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS online_link TEXT`);
     await client.query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS accessibility_info TEXT`);
+    await client.query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS venue_id INTEGER REFERENCES venues(id) ON DELETE SET NULL`);
+    await client.query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS venue_room TEXT`);
+    await client.query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS hire_cost TEXT`);
     await client.query(`ALTER TABLE event_guests ADD COLUMN IF NOT EXISTS attendance_type TEXT DEFAULT 'in-person'`);
     await client.query(`ALTER TABLE event_guests ADD COLUMN IF NOT EXISTS accessibility_needs TEXT`);
 
@@ -639,20 +659,21 @@ app.post('/api/events', requireAuth, async (req, res) => {
   const { name, event_date, end_date, venue_name, venue_address, venue_lat, venue_lng,
     description, hero_image_url, dress_code, rsvp_deadline, max_guests, allow_plus_one,
     check_in_pin, email_subject, email_from_name, email_reply_to, status,
-    hashtags, allow_online, online_link, accessibility_info } = req.body;
+    hashtags, allow_online, online_link, accessibility_info, venue_id, venue_room, hire_cost } = req.body;
   if (!name || !event_date) return res.status(400).json({ error: 'Name and date required' });
   try {
     const slug = genSlug(name);
     const { rows } = await pool.query(`
       INSERT INTO events (slug,name,event_date,end_date,venue_name,venue_address,venue_lat,venue_lng,
         description,hero_image_url,dress_code,rsvp_deadline,max_guests,allow_plus_one,
-        check_in_pin,email_subject,email_from_name,email_reply_to,status,hashtags,allow_online,online_link,accessibility_info)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23) RETURNING *`,
+        check_in_pin,email_subject,email_from_name,email_reply_to,status,hashtags,allow_online,online_link,accessibility_info,venue_id,venue_room,hire_cost)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26) RETURNING *`,
       [slug,name,event_date,end_date||null,venue_name||null,venue_address||null,
        venue_lat||null,venue_lng||null,description||null,hero_image_url||null,
        dress_code||null,rsvp_deadline||null,max_guests||null,allow_plus_one||false,
        check_in_pin||null,email_subject||null,email_from_name||null,email_reply_to||null,
-       status||'draft',hashtags||null,allow_online||false,online_link||null,accessibility_info||null]);
+       status||'draft',hashtags||null,allow_online||false,online_link||null,accessibility_info||null,
+       venue_id||null,venue_room||null,hire_cost||null]);
     res.json(rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -669,7 +690,7 @@ app.put('/api/events/:id', requireAuth, async (req, res) => {
   const { name, event_date, end_date, venue_name, venue_address, venue_lat, venue_lng,
     description, hero_image_url, dress_code, rsvp_deadline, max_guests, allow_plus_one,
     check_in_pin, email_subject, email_from_name, email_reply_to, status,
-    hashtags, allow_online, online_link, accessibility_info } = req.body;
+    hashtags, allow_online, online_link, accessibility_info, venue_id, venue_room, hire_cost } = req.body;
   try {
     const { rows } = await pool.query(`
       UPDATE events SET name=$1,event_date=$2,end_date=$3,venue_name=$4,venue_address=$5,
@@ -677,12 +698,13 @@ app.put('/api/events/:id', requireAuth, async (req, res) => {
         rsvp_deadline=$11,max_guests=$12,allow_plus_one=$13,check_in_pin=$14,
         email_subject=$15,email_from_name=$16,email_reply_to=$17,status=$18,
         hashtags=$19,allow_online=$20,online_link=$21,accessibility_info=$22,
-        updated_at=NOW() WHERE id=$23 RETURNING *`,
+        venue_id=$23,venue_room=$24,hire_cost=$25,updated_at=NOW() WHERE id=$26 RETURNING *`,
       [name,event_date,end_date||null,venue_name||null,venue_address||null,
        venue_lat||null,venue_lng||null,description||null,hero_image_url||null,
        dress_code||null,rsvp_deadline||null,max_guests||null,allow_plus_one||false,
        check_in_pin||null,email_subject||null,email_from_name||null,email_reply_to||null,
-       status||'draft',hashtags||null,allow_online||false,online_link||null,accessibility_info||null,req.params.id]);
+       status||'draft',hashtags||null,allow_online||false,online_link||null,accessibility_info||null,
+       venue_id||null,venue_room||null,hire_cost||null,req.params.id]);
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
     res.json(rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -692,6 +714,77 @@ app.delete('/api/events/:id', requireAuth, async (req, res) => {
   try {
     await pool.query('DELETE FROM events WHERE id=$1', [req.params.id]);
     res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Venue Routes ────────────────────────────────────────────────────────────
+app.get('/api/venues', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT v.*,
+        COUNT(DISTINCT e.id) AS event_count
+      FROM venues v
+      LEFT JOIN events e ON e.venue_id = v.id
+      GROUP BY v.id ORDER BY v.name`);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/venues', requireAuth, async (req, res) => {
+  const { name, address, room, venue_lat, venue_lng, phone, contact_name, contact_email,
+    hire_price, accessibility_info, notes } = req.body;
+  if (!name) return res.status(400).json({ error: 'Name required' });
+  try {
+    const { rows } = await pool.query(`
+      INSERT INTO venues (name,address,room,venue_lat,venue_lng,phone,contact_name,contact_email,hire_price,accessibility_info,notes)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      [name,address||null,room||null,venue_lat||null,venue_lng||null,phone||null,
+       contact_name||null,contact_email||null,hire_price||null,accessibility_info||null,notes||null]);
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/venues/:id', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM venues WHERE id=$1', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/venues/:id', requireAuth, async (req, res) => {
+  const { name, address, room, venue_lat, venue_lng, phone, contact_name, contact_email,
+    hire_price, accessibility_info, notes } = req.body;
+  try {
+    const { rows } = await pool.query(`
+      UPDATE venues SET name=$1,address=$2,room=$3,venue_lat=$4,venue_lng=$5,phone=$6,
+        contact_name=$7,contact_email=$8,hire_price=$9,accessibility_info=$10,notes=$11,
+        updated_at=NOW() WHERE id=$12 RETURNING *`,
+      [name,address||null,room||null,venue_lat||null,venue_lng||null,phone||null,
+       contact_name||null,contact_email||null,hire_price||null,accessibility_info||null,notes||null,req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/venues/:id', requireAuth, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM venues WHERE id=$1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/venues/:id/history', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT e.id, e.name, e.event_date, e.end_date, e.status, e.hire_cost,
+        COUNT(DISTINCT eg.id) AS total_guests,
+        COUNT(DISTINCT CASE WHEN eg.status='accepted' THEN eg.id END) AS accepted
+      FROM events e
+      LEFT JOIN event_guests eg ON eg.event_id = e.id
+      WHERE e.venue_id = $1
+      GROUP BY e.id ORDER BY e.event_date DESC`, [req.params.id]);
+    res.json(rows);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
