@@ -113,7 +113,9 @@ async function migrate() {
     await client.query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS hashtags TEXT`);
     await client.query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS allow_online BOOLEAN DEFAULT false`);
     await client.query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS online_link TEXT`);
+    await client.query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS accessibility_info TEXT`);
     await client.query(`ALTER TABLE event_guests ADD COLUMN IF NOT EXISTS attendance_type TEXT DEFAULT 'in-person'`);
+    await client.query(`ALTER TABLE event_guests ADD COLUMN IF NOT EXISTS accessibility_needs TEXT`);
 
     // Seed default admin if none exists
     const { rows } = await client.query('SELECT COUNT(*) FROM admin_users');
@@ -405,6 +407,18 @@ h1,h2,h3,.mini-card h2{font-family:'Playfair Display',Georgia,serif}
 .map-wrap iframe{width:100%;height:240px;border:none;display:block}
 .closed-msg{text-align:center;color:#888;padding:16px;font-size:15px}
 
+/* Accessibility */
+.access-btn{display:inline-flex;align-items:center;gap:7px;margin-top:14px;padding:9px 16px;background:#f5f3ff;border:1.5px solid #c4b5fd;border-radius:8px;color:#5b21b6;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;font-family:inherit}
+.access-btn:hover{background:#ede9fe;border-color:#7c3aed}
+.access-modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:200;align-items:center;justify-content:center;padding:20px}
+.access-modal-backdrop.open{display:flex}
+.access-modal{background:#fff;border-radius:16px;padding:32px;max-width:480px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.access-modal h3{font-family:'Playfair Display',Georgia,serif;color:#2D1B69;font-size:18px;margin-bottom:4px}
+.access-modal .access-sub{font-size:12px;color:#9ca3af;margin-bottom:16px}
+.access-modal .access-body{font-size:14px;color:#374151;line-height:1.7;white-space:pre-wrap}
+.access-modal-close{display:block;margin-top:20px;width:100%;padding:11px;background:#f3f4f6;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}
+.access-modal-close:hover{background:#e5e7eb}
+
 /* Attendance type selector */
 .attend-type-wrap{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:4px}
 .attend-type-card{position:relative}
@@ -467,7 +481,22 @@ h1,h2,h3,.mini-card h2{font-family:'Playfair Display',Georgia,serif}
     <p style="font-size:15px;color:#444">Dear <strong>${esc(guest.first_name)} ${esc(guest.last_name)}</strong>,</p>
     ${statusBanner}
     ${event.rsvp_deadline?`<p style="font-size:13px;color:#888;margin-top:10px">Please respond by <strong>${new Date(event.rsvp_deadline).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}</strong></p>`:''}
+    ${event.accessibility_info?`<button class="access-btn" onclick="document.getElementById('accessModal').classList.add('open')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="8" r="1" fill="currentColor" stroke="none"/><path d="M12 11v6"/><path d="M9 17h6"/></svg>
+      View venue accessibility details
+    </button>`:''}
   </div>
+
+  ${event.accessibility_info?`
+  <div class="access-modal-backdrop" id="accessModal" onclick="if(event.target===this)this.classList.remove('open')">
+    <div class="access-modal">
+      <h3>Accessibility Information</h3>
+      <div class="access-sub">${esc(event.venue_name||'This venue')}</div>
+      <div class="access-body">${esc(event.accessibility_info)}</div>
+      <button class="access-modal-close" onclick="document.getElementById('accessModal').classList.remove('open')">Close</button>
+    </div>
+  </div>`:''}
+
 
   ${canRsvp ? `
   <div class="rsvp-section">
@@ -509,6 +538,10 @@ h1,h2,h3,.mini-card h2{font-family:'Playfair Display',Georgia,serif}
         </div>` : ''}
         ${event.allow_plus_one?`<div class="fg"><label>Plus one name (optional)</label><input type="text" name="plus_one_name" value="${esc(eventGuest.plus_one_name||'')}"></div>`:''}
         <div class="fg"><label>Dietary requirements (optional)</label><input type="text" name="dietary" value="${esc(eventGuest.dietary_requirements||'')}"></div>
+        <div class="fg">
+          <label>Accessibility needs (optional)</label>
+          <textarea name="accessibility_needs" rows="3" placeholder="Please let us know of any specific accessibility requirements so we can best support your visit…">${esc(eventGuest.accessibility_needs||'')}</textarea>
+        </div>
         ${questionsHtml}
       </div>
       <div class="success" id="ok">Thank you — your response has been saved ✓</div>
@@ -606,20 +639,20 @@ app.post('/api/events', requireAuth, async (req, res) => {
   const { name, event_date, end_date, venue_name, venue_address, venue_lat, venue_lng,
     description, hero_image_url, dress_code, rsvp_deadline, max_guests, allow_plus_one,
     check_in_pin, email_subject, email_from_name, email_reply_to, status,
-    hashtags, allow_online, online_link } = req.body;
+    hashtags, allow_online, online_link, accessibility_info } = req.body;
   if (!name || !event_date) return res.status(400).json({ error: 'Name and date required' });
   try {
     const slug = genSlug(name);
     const { rows } = await pool.query(`
       INSERT INTO events (slug,name,event_date,end_date,venue_name,venue_address,venue_lat,venue_lng,
         description,hero_image_url,dress_code,rsvp_deadline,max_guests,allow_plus_one,
-        check_in_pin,email_subject,email_from_name,email_reply_to,status,hashtags,allow_online,online_link)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22) RETURNING *`,
+        check_in_pin,email_subject,email_from_name,email_reply_to,status,hashtags,allow_online,online_link,accessibility_info)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23) RETURNING *`,
       [slug,name,event_date,end_date||null,venue_name||null,venue_address||null,
        venue_lat||null,venue_lng||null,description||null,hero_image_url||null,
        dress_code||null,rsvp_deadline||null,max_guests||null,allow_plus_one||false,
        check_in_pin||null,email_subject||null,email_from_name||null,email_reply_to||null,
-       status||'draft',hashtags||null,allow_online||false,online_link||null]);
+       status||'draft',hashtags||null,allow_online||false,online_link||null,accessibility_info||null]);
     res.json(rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -636,20 +669,20 @@ app.put('/api/events/:id', requireAuth, async (req, res) => {
   const { name, event_date, end_date, venue_name, venue_address, venue_lat, venue_lng,
     description, hero_image_url, dress_code, rsvp_deadline, max_guests, allow_plus_one,
     check_in_pin, email_subject, email_from_name, email_reply_to, status,
-    hashtags, allow_online, online_link } = req.body;
+    hashtags, allow_online, online_link, accessibility_info } = req.body;
   try {
     const { rows } = await pool.query(`
       UPDATE events SET name=$1,event_date=$2,end_date=$3,venue_name=$4,venue_address=$5,
         venue_lat=$6,venue_lng=$7,description=$8,hero_image_url=$9,dress_code=$10,
         rsvp_deadline=$11,max_guests=$12,allow_plus_one=$13,check_in_pin=$14,
         email_subject=$15,email_from_name=$16,email_reply_to=$17,status=$18,
-        hashtags=$19,allow_online=$20,online_link=$21,
-        updated_at=NOW() WHERE id=$22 RETURNING *`,
+        hashtags=$19,allow_online=$20,online_link=$21,accessibility_info=$22,
+        updated_at=NOW() WHERE id=$23 RETURNING *`,
       [name,event_date,end_date||null,venue_name||null,venue_address||null,
        venue_lat||null,venue_lng||null,description||null,hero_image_url||null,
        dress_code||null,rsvp_deadline||null,max_guests||null,allow_plus_one||false,
        check_in_pin||null,email_subject||null,email_from_name||null,email_reply_to||null,
-       status||'draft',hashtags||null,allow_online||false,online_link||null,req.params.id]);
+       status||'draft',hashtags||null,allow_online||false,online_link||null,accessibility_info||null,req.params.id]);
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
     res.json(rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -935,7 +968,7 @@ app.get('/rsvp/:code', async (req, res) => {
 });
 
 app.post('/rsvp/:code', async (req, res) => {
-  const { status, plus_one_name, dietary, answers, attendance_type } = req.body;
+  const { status, plus_one_name, dietary, answers, attendance_type, accessibility_needs } = req.body;
   if (!['accepted','declined'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
   try {
     const { rows: eg } = await pool.query(`
@@ -956,9 +989,9 @@ app.post('/rsvp/:code', async (req, res) => {
 
     await pool.query(`
       UPDATE event_guests SET status=$1,plus_one_name=$2,dietary_requirements=$3,
-        attendance_type=$4,rsvp_submitted_at=NOW()
-      WHERE id=$5`,
-      [status, plus_one_name||null, dietary||null, resolvedAttendance, eventGuest.id]);
+        attendance_type=$4,accessibility_needs=$5,rsvp_submitted_at=NOW()
+      WHERE id=$6`,
+      [status, plus_one_name||null, dietary||null, resolvedAttendance, accessibility_needs||null, eventGuest.id]);
 
     // Save custom answers
     if (answers && typeof answers === 'object') {
@@ -1065,9 +1098,26 @@ app.get('/api/events/:id/stats', requireAuth, async (req, res) => {
         COUNT(CASE WHEN status='pending' THEN 1 END) AS pending,
         COUNT(CASE WHEN checked_in_at IS NOT NULL THEN 1 END) AS checked_in,
         COUNT(CASE WHEN invitation_sent_at IS NOT NULL THEN 1 END) AS invited,
-        COUNT(CASE WHEN reminder_sent_at IS NOT NULL THEN 1 END) AS reminded
+        COUNT(CASE WHEN reminder_sent_at IS NOT NULL THEN 1 END) AS reminded,
+        COUNT(CASE WHEN accessibility_needs IS NOT NULL AND accessibility_needs <> '' THEN 1 END) AS with_accessibility_needs
       FROM event_guests WHERE event_id=$1`, [req.params.id]);
     res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Accessibility Needs ──────────────────────────────────────────────────────
+app.get('/api/events/:id/accessibility', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT eg.id, eg.accessibility_needs, eg.status, eg.attendance_type,
+             g.first_name, g.last_name, g.email
+      FROM event_guests eg
+      JOIN guests g ON g.id = eg.guest_id
+      WHERE eg.event_id = $1
+        AND eg.accessibility_needs IS NOT NULL
+        AND eg.accessibility_needs <> ''
+      ORDER BY g.last_name, g.first_name`, [req.params.id]);
+    res.json(rows);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

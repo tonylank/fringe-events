@@ -233,6 +233,7 @@ tr:hover td{background:#fafafa}
         <div class="tab" onclick="showTab('tabGuests',this);loadEventGuests()">Guests</div>
         <div class="tab" onclick="showTab('tabQuestions',this);loadQuestions()">RSVP Form</div>
         <div class="tab" onclick="showTab('tabMessages',this)">Messages</div>
+        <div class="tab" data-for="tabAccessibility" onclick="showTab('tabAccessibility',this);loadAccessibilityNeeds()">Accessibility</div>
       </div>
 
       <!-- Overview tab -->
@@ -268,6 +269,7 @@ tr:hover td{background:#fafafa}
                 <select id="evPlusOne"><option value="false">No</option><option value="true">Yes</option></select></div>
               <div class="fg"><label>Check-in PIN</label><input id="evPin" type="text" placeholder="4-digit PIN for check-in app"></div>
               <div class="fg span2"><label>Hashtags</label><input id="evHashtags" type="text" placeholder="#EdFringe #MyEvent"></div>
+              <div class="fg span2"><label>Accessibility Information <span style="font-weight:400;color:var(--muted)">(shown to guests on their RSVP page)</span></label><textarea id="evAccessibility" rows="4" placeholder="Step-free access via main entrance, accessible toilets on ground floor, hearing loop available…"></textarea></div>
               <div class="fg span2" style="background:#f5f3ff;border:1.5px solid #e0d9f5;border-radius:8px;padding:14px">
                 <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:0">
                   <input type="checkbox" id="evAllowOnline" onchange="toggleOnlineLink()"> Allow online attendance?
@@ -329,6 +331,19 @@ tr:hover td{background:#fafafa}
         </div>
         <div style="margin-top:12px;padding:14px;background:#f0fdf4;border-radius:8px;border:1px solid #bbf7d0">
           <p style="font-size:13px;color:#065f46"><strong>RSVP Page URL:</strong> <span id="rsvpUrlExample" style="font-family:monospace"></span></p>
+        </div>
+      </div>
+
+      <!-- Accessibility tab -->
+      <div class="tab-pane" id="tabAccessibility">
+        <div class="card">
+          <div class="card-head">
+            <h2>Accessibility Requirements</h2>
+            <span style="font-size:12px;color:var(--muted)">Guests who have provided specific accessibility needs</span>
+          </div>
+          <div class="card-body" id="accessibilityBody">
+            <p style="color:var(--muted);font-size:13px">Loading…</p>
+          </div>
         </div>
       </div>
 
@@ -538,6 +553,7 @@ async function openEvent(id) {
   document.getElementById('evAllowOnline').checked = !!ev.allow_online;
   document.getElementById('evOnlineLink').value = ev.online_link || '';
   toggleOnlineLink();
+  document.getElementById('evAccessibility').value = ev.accessibility_info || '';
   document.getElementById('evFromName').value = ev.email_from_name || '';
   document.getElementById('evReplyTo').value = ev.email_reply_to || 'rsvp@edfringe.com';
   document.getElementById('evSubject').value = ev.email_subject || '';
@@ -563,11 +579,42 @@ async function loadEventStats() {
       <span style="font-size:11px;background:#ede9fe;color:#5b21b6;padding:2px 8px;border-radius:10px;font-weight:700">💻 ${stats.accepted_online||0} online</span>
     </div>
   </div>`;
+  const accessHtml = (stats.with_accessibility_needs > 0) ? `<div class="stat-card" style="cursor:pointer;border-color:#a78bfa" onclick="goToAccessibilityTab()">
+    <div class="stat-num" style="color:#7C3AED">${stats.with_accessibility_needs}</div>
+    <div class="stat-label">Accessibility Needs</div>
+    <div style="font-size:11px;color:#7C3AED;margin-top:4px;font-weight:600">View details →</div>
+  </div>` : '';
   document.getElementById('eventStats').innerHTML = acceptedHtml +
     cards.map(s => `<div class="stat-card">
       <div class="stat-num" style="${s.color?'color:'+s.color:''}">${s.num||0}</div>
       <div class="stat-label">${s.label}</div>
-    </div>`).join('');
+    </div>`).join('') + accessHtml;
+}
+
+function goToAccessibilityTab() {
+  const el = document.querySelector('.tab[data-for="tabAccessibility"]');
+  showTab('tabAccessibility', el);
+  loadAccessibilityNeeds();
+}
+
+async function loadAccessibilityNeeds() {
+  const body = document.getElementById('accessibilityBody');
+  body.innerHTML = '<p style="color:var(--muted);font-size:13px">Loading…</p>';
+  const rows = await apiFetch(`/api/events/${currentEventId}/accessibility`);
+  if (!rows) return;
+  if (!rows.length) {
+    body.innerHTML = '<p style="color:var(--muted);font-size:13px">No guests have provided accessibility requirements.</p>';
+    return;
+  }
+  body.innerHTML = `<div class="tbl-wrap"><table>
+    <thead><tr><th>Name</th><th>Email</th><th>Attendance</th><th>Accessibility Requirements</th></tr></thead>
+    <tbody>${rows.map(r => `<tr>
+      <td><strong>${escH(r.first_name)} ${escH(r.last_name)}</strong></td>
+      <td style="color:var(--muted)">${escH(r.email)}</td>
+      <td>${r.attendance_type === 'online' ? '💻 Online' : '📍 In person'}</td>
+      <td style="white-space:pre-wrap;font-size:13px">${escH(r.accessibility_needs)}</td>
+    </tr>`).join('')}</tbody>
+  </table></div>`;
 }
 
 async function saveEventDetails() {
@@ -589,6 +636,7 @@ async function saveEventDetails() {
     hashtags: document.getElementById('evHashtags').value,
     allow_online: document.getElementById('evAllowOnline').checked,
     online_link: document.getElementById('evOnlineLink').value || null,
+    accessibility_info: document.getElementById('evAccessibility').value || null,
     email_from_name: document.getElementById('evFromName').value,
     email_reply_to: document.getElementById('evReplyTo').value,
     email_subject: document.getElementById('evSubject').value,
