@@ -487,11 +487,16 @@ async function loadEvents() {
           <span class="badge badge-${ev.status}">${ev.status}</span>
         </div>
         <div class="event-card-stats">
-          <div class="ec-stat"><strong>${ev.total_guests||0}</strong>&nbsp;guests</div>
-          <div class="ec-stat" style="color:#059669"><strong>${ev.accepted||0}</strong>&nbsp;accepted</div>
+          <div class="ec-stat"><strong>${ev.total_guests||0}</strong>&nbsp;total</div>
           <div class="ec-stat" style="color:#d97706"><strong>${ev.pending||0}</strong>&nbsp;pending</div>
           <div class="ec-stat" style="color:#dc2626"><strong>${ev.declined||0}</strong>&nbsp;declined</div>
         </div>
+        ${(ev.accepted||0) > 0 ? `
+        <div style="margin-top:10px;font-size:12px;font-weight:700;color:#059669;margin-bottom:4px">✓ ${ev.accepted||0} accepted</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+          <span style="font-size:11px;background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:10px">📍 ${ev.accepted_inperson||0} in person</span>
+          ${(ev.accepted_online||0) > 0 ? `<span style="font-size:11px;background:#ede9fe;color:#5b21b6;padding:2px 8px;border-radius:10px">💻 ${ev.accepted_online||0} online</span>` : ''}
+        </div>` : ''}
         ${ev.total_guests > 0 ? `
         <div class="progress"><div class="progress-fill" style="width:${Math.round((ev.accepted||0)/ev.total_guests*100)}%"></div></div>
         <div style="font-size:11px;color:var(--muted)">${Math.round((ev.accepted||0)/ev.total_guests*100)}% accepted</div>
@@ -540,17 +545,27 @@ async function openEvent(id) {
 async function loadEventStats() {
   const stats = await apiFetch(`/api/events/${currentEventId}/stats`);
   if (!stats) return;
-  document.getElementById('eventStats').innerHTML = [
+  const cards = [
     {num: stats.total, label: 'Total Guests'},
-    {num: stats.accepted, label: 'Accepted', color: '#059669'},
     {num: stats.pending, label: 'Pending', color: '#D97706'},
     {num: stats.declined, label: 'Declined', color: '#DC2626'},
     {num: stats.checked_in, label: 'Checked In', color: '#7C3AED'},
     {num: stats.invited, label: 'Invited'},
-  ].map(s => `<div class="stat-card">
-    <div class="stat-num" style="${s.color?'color:'+s.color:''}">${s.num||0}</div>
-    <div class="stat-label">${s.label}</div>
-  </div>`).join('');
+  ];
+  // Accepted: always show total; split in-person/online if any online
+  const acceptedHtml = `<div class="stat-card">
+    <div class="stat-num" style="color:#059669">${stats.accepted||0}</div>
+    <div class="stat-label">Accepted</div>
+    <div style="margin-top:8px;display:flex;flex-direction:column;gap:4px">
+      <span style="font-size:11px;background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:10px;font-weight:700">📍 ${stats.accepted_inperson||0} in person</span>
+      <span style="font-size:11px;background:#ede9fe;color:#5b21b6;padding:2px 8px;border-radius:10px;font-weight:700">💻 ${stats.accepted_online||0} online</span>
+    </div>
+  </div>`;
+  document.getElementById('eventStats').innerHTML = acceptedHtml +
+    cards.map(s => `<div class="stat-card">
+      <div class="stat-num" style="${s.color?'color:'+s.color:''}">${s.num||0}</div>
+      <div class="stat-label">${s.label}</div>
+    </div>`).join('');
 }
 
 async function saveEventDetails() {

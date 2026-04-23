@@ -552,7 +552,10 @@ app.get('/api/events', requireAuth, async (req, res) => {
       SELECT e.*,
         COUNT(DISTINCT eg.id) AS total_guests,
         COUNT(DISTINCT CASE WHEN eg.status='accepted' THEN eg.id END) AS accepted,
+        COUNT(DISTINCT CASE WHEN eg.status='accepted' AND eg.attendance_type='in-person' THEN eg.id END) AS accepted_inperson,
+        COUNT(DISTINCT CASE WHEN eg.status='accepted' AND eg.attendance_type='online' THEN eg.id END) AS accepted_online,
         COUNT(DISTINCT CASE WHEN eg.status='declined' THEN eg.id END) AS declined,
+        COUNT(DISTINCT CASE WHEN eg.status='pending' THEN eg.id END) AS pending,
         COUNT(DISTINCT CASE WHEN eg.checked_in_at IS NOT NULL THEN eg.id END) AS checked_in
       FROM events e
       LEFT JOIN event_guests eg ON eg.event_id = e.id
@@ -1019,6 +1022,8 @@ app.get('/api/events/:id/stats', requireAuth, async (req, res) => {
       SELECT
         COUNT(*) AS total,
         COUNT(CASE WHEN status='accepted' THEN 1 END) AS accepted,
+        COUNT(CASE WHEN status='accepted' AND attendance_type='in-person' THEN 1 END) AS accepted_inperson,
+        COUNT(CASE WHEN status='accepted' AND attendance_type='online' THEN 1 END) AS accepted_online,
         COUNT(CASE WHEN status='declined' THEN 1 END) AS declined,
         COUNT(CASE WHEN status='pending' THEN 1 END) AS pending,
         COUNT(CASE WHEN checked_in_at IS NOT NULL THEN 1 END) AS checked_in,
