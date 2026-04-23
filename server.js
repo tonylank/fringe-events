@@ -934,6 +934,7 @@ app.get('/api/checkin-page-init', async (req, res) => {
 });
 
 // ─── Admin pages ──────────────────────────────────────────────────────────────
+app.get('/', (req, res) => res.redirect('/admin'));
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.get('/admin/*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.get('/checkin/:slug', (req, res) => res.sendFile(path.join(__dirname, 'public', 'checkin.html')));
