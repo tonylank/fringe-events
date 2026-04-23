@@ -126,6 +126,19 @@ async function migrate() {
 }
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
+// CSP — allow inline scripts/styles (app uses no external JS libs), Google Maps iframe, any img src
+app.use((req, res, next) => {
+  res.setHeader('Content-Security-Policy',
+    "default-src 'self'; " +
+    "script-src 'self' 'unsafe-inline'; " +
+    "style-src 'self' 'unsafe-inline'; " +
+    "img-src * data: blob:; " +
+    "connect-src 'self'; " +
+    "frame-src https://www.google.com; " +
+    "font-src 'self' data:");
+  next();
+});
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
