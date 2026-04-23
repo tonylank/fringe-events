@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fringe Events — Admin</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--pri:#2D1B69;--acc:#7C3AED;--ok:#059669;--warn:#D97706;--err:#DC2626;--bg:#F0EEF8;--card:#fff;--muted:#6B7280;--border:#E5E7EB;--text:#111827}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);font-size:14px}
+a{color:inherit;text-decoration:none}
+
+/* Login */
+#loginPage{display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--pri)}
+.login-card{background:#fff;border-radius:16px;padding:40px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.login-card h1{font-size:22px;color:var(--pri);margin-bottom:4px}
+.login-card p{color:var(--muted);font-size:13px;margin-bottom:28px}
+.login-card input{width:100%;padding:12px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;margin-bottom:12px;outline:none;transition:border-color .2s}
+.login-card input:focus{border-color:var(--acc)}
+.login-card button{width:100%;padding:13px;background:var(--acc);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer}
+.login-card button:hover{background:#6D28D9}
+.login-err{color:var(--err);font-size:13px;margin-top:10px;text-align:center}
+
+/* App shell */
+#app{display:none;min-height:100vh}
+.top-nav{background:var(--pri);color:#fff;padding:0 24px;height:56px;display:flex;align-items:center;gap:0;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.nav-brand{font-weight:800;font-size:16px;letter-spacing:-.5px;margin-right:32px;white-space:nowrap}
+.nav-tabs{display:flex;flex:1;gap:0}
+.nav-tab{padding:0 20px;height:56px;display:flex;align-items:center;font-size:13px;font-weight:600;color:rgba(255,255,255,.65);cursor:pointer;border-bottom:3px solid transparent;transition:all .15s;white-space:nowrap}
+.nav-tab:hover{color:#fff;background:rgba(255,255,255,.08)}
+.nav-tab.active{color:#fff;border-bottom-color:var(--acc)}
+.nav-right{display:flex;align-items:center;gap:12px;margin-left:auto}
+.nav-user{font-size:12px;color:rgba(255,255,255,.6)}
+.logout-btn{font-size:12px;color:rgba(255,255,255,.5);cursor:pointer;background:none;border:none;padding:4px 8px;border-radius:4px}
+.logout-btn:hover{color:#fff;background:rgba(255,255,255,.1)}
+
+.page-content{padding:28px 24px;max-width:1200px;margin:0 auto}
+.view{display:none}.view.active{display:block}
+
+/* Heading row */
+.page-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;gap:12px;flex-wrap:wrap}
+.page-head h1{font-size:20px;font-weight:700;color:var(--pri)}
+.page-head-right{display:flex;gap:10px;flex-wrap:wrap}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .15s;white-space:nowrap}
+.btn-pri{background:var(--acc);color:#fff}.btn-pri:hover{background:#6D28D9}
+.btn-sec{background:#fff;color:var(--pri);border:1.5px solid var(--border)}.btn-sec:hover{border-color:var(--acc);color:var(--acc)}
+.btn-ok{background:var(--ok);color:#fff}.btn-ok:hover{opacity:.9}
+.btn-warn{background:var(--warn);color:#fff}.btn-warn:hover{opacity:.9}
+.btn-err{background:var(--err);color:#fff}.btn-err:hover{opacity:.9}
+.btn-sm{padding:6px 12px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+/* Cards */
+.card{background:var(--card);border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.06);border:1px solid var(--border);margin-bottom:20px}
+.card-head{padding:18px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.card-head h2{font-size:15px;font-weight:700;color:var(--pri)}
+.card-body{padding:20px}
+
+/* Stats grid */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px;margin-bottom:24px}
+.stat-card{background:#fff;border-radius:10px;padding:18px 20px;border:1px solid var(--border);box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.stat-num{font-size:28px;font-weight:800;color:var(--pri);margin-bottom:2px}
+.stat-label{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+
+/* Table */
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;padding:10px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);border-bottom:2px solid var(--border);white-space:nowrap}
+td{padding:11px 14px;border-bottom:1px solid var(--border);vertical-align:middle;font-size:13px}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#fafafa}
+
+/* Status badges */
+.badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.3px}
+.badge-pending{background:#FEF3C7;color:#92400E}
+.badge-accepted{background:#D1FAE5;color:#065F46}
+.badge-declined{background:#FEE2E2;color:#991B1B}
+.badge-draft{background:#F3F4F6;color:#6B7280}
+.badge-active{background:#DBEAFE;color:#1E40AF}
+.badge-closed{background:#F3F4F6;color:#6B7280}
+
+/* Form */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.form-grid.cols-1{grid-template-columns:1fr}
+.form-grid.cols-3{grid-template-columns:1fr 1fr 1fr}
+.fg{display:flex;flex-direction:column;gap:5px}
+.fg.span2{grid-column:span 2}
+.fg label{font-size:12px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.4px}
+.fg input,.fg select,.fg textarea{padding:10px 13px;border:1.5px solid var(--border);border-radius:7px;font-size:14px;font-family:inherit;transition:border-color .2s;background:#fff}
+.fg input:focus,.fg select:focus,.fg textarea:focus{border-color:var(--acc);outline:none}
+.fg textarea{resize:vertical;min-height:80px}
+.fg small{font-size:11px;color:var(--muted)}
+
+/* Search */
+.search-row{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+.search-input{flex:1;min-width:200px;padding:9px 14px;border:1.5px solid var(--border);border-radius:7px;font-size:14px;outline:none;background:#fff}
+.search-input:focus{border-color:var(--acc)}
+
+/* Tabs */
+.tabs{display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:24px}
+.tab{padding:10px 20px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s}
+.tab:hover{color:var(--pri)}
+.tab.active{color:var(--pri);border-bottom-color:var(--acc)}
+.tab-pane{display:none}.tab-pane.active{display:block}
+
+/* Modal */
+.modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center;padding:20px}
+.modal-backdrop.show{display:flex}
+.modal{background:#fff;border-radius:14px;padding:28px;width:100%;max-width:560px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.modal h2{font-size:18px;font-weight:700;color:var(--pri);margin-bottom:20px}
+.modal-footer{display:flex;justify-content:flex-end;gap:10px;margin-top:24px;padding-top:18px;border-top:1px solid var(--border)}
+
+/* Guest selector */
+.guest-picker{border:1.5px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:12px}
+.guest-picker-search{width:100%;padding:10px 14px;border:none;border-bottom:1px solid var(--border);font-size:14px;outline:none}
+.guest-picker-list{max-height:220px;overflow-y:auto}
+.guest-pick-item{padding:10px 14px;cursor:pointer;display:flex;align-items:center;gap:10px;border-bottom:1px solid #f3f4f6;font-size:13px}
+.guest-pick-item:hover{background:#f5f3ff}
+.guest-pick-item.selected{background:#ede9fe}
+.guest-pick-item:last-child{border-bottom:none}
+
+/* Toast */
+.toast-wrap{position:fixed;bottom:24px;right:24px;z-index:999;display:flex;flex-direction:column;gap:8px}
+.toast{background:#1F2937;color:#fff;padding:12px 18px;border-radius:8px;font-size:13px;font-weight:500;box-shadow:0 4px 16px rgba(0,0,0,.2);animation:fadeUp .3s ease;max-width:340px}
+.toast.ok{background:#065F46}.toast.err{background:#991B1B}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+/* Questions builder */
+.q-item{background:#f9f8ff;border:1px solid #e0d9f5;border-radius:8px;padding:14px;margin-bottom:10px;display:flex;align-items:center;gap:12px}
+.q-item-text{flex:1;font-size:13px;font-weight:600;color:var(--pri)}
+.q-item-type{font-size:11px;color:var(--muted);background:var(--border);padding:2px 8px;border-radius:10px}
+
+/* Event list cards */
+.event-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;margin-bottom:20px}
+.event-card{background:#fff;border-radius:12px;border:1px solid var(--border);overflow:hidden;cursor:pointer;transition:box-shadow .15s,transform .15s}
+.event-card:hover{box-shadow:0 4px 20px rgba(0,0,0,.1);transform:translateY(-2px)}
+.event-card-hero{height:140px;background:linear-gradient(135deg,var(--pri),var(--acc));position:relative;overflow:hidden}
+.event-card-hero img{width:100%;height:100%;object-fit:cover}
+.event-card-body{padding:16px}
+.event-card-name{font-size:15px;font-weight:700;color:var(--pri);margin-bottom:4px}
+.event-card-meta{font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.5}
+.event-card-stats{display:flex;gap:12px;font-size:12px}
+.ec-stat{display:flex;align-items:center;gap:4px;color:var(--muted)}
+.ec-stat strong{color:var(--text)}
+
+/* Progress bar */
+.progress{height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden;margin:8px 0 4px}
+.progress-fill{height:100%;background:var(--acc);border-radius:3px;transition:width .3s}
+
+@media(max-width:640px){
+  .form-grid{grid-template-columns:1fr}.fg.span2{grid-column:span 1}
+  .page-content{padding:16px}
+  .event-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- Login -->
+<div id="loginPage">
+  <div class="login-card">
+    <h1>Fringe Events</h1>
+    <p>Admin dashboard — sign in to continue</p>
+    <input type="email" id="loginEmail" placeholder="Email address" autocomplete="email">
+    <input type="password" id="loginPass" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+    <button onclick="doLogin()">Sign in</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- App -->
+<div id="app">
+  <nav class="top-nav">
+    <div class="nav-brand">🎪 Fringe Events</div>
+    <div class="nav-tabs">
+      <div class="nav-tab active" onclick="showView('events')">Events</div>
+      <div class="nav-tab" onclick="showView('guests')">Guest Database</div>
+    </div>
+    <div class="nav-right">
+      <span class="nav-user" id="navUser"></span>
+      <button class="logout-btn" onclick="doLogout()">Sign out</button>
+    </div>
+  </nav>
+
+  <div class="page-content">
+    <!-- Events view -->
+    <div class="view active" id="viewEvents">
+      <div class="page-head">
+        <h1>Events</h1>
+        <div class="page-head-right">
+          <button class="btn btn-pri" onclick="openCreateEvent()">+ New Event</button>
+        </div>
+      </div>
+      <div class="event-grid" id="eventGrid">
+        <div style="color:var(--muted);padding:20px">Loading…</div>
+      </div>
+    </div>
+
+    <!-- Event detail view -->
+    <div class="view" id="viewEvent">
+      <div class="page-head">
+        <div style="display:flex;align-items:center;gap:12px">
+          <button class="btn btn-sec btn-sm" onclick="showView('events')">← Back</button>
+          <h1 id="eventDetailName">Event</h1>
+          <span id="eventDetailBadge" class="badge badge-draft"></span>
+        </div>
+        <div class="page-head-right">
+          <button class="btn btn-err btn-sm" onclick="deleteCurrentEvent()">Delete</button>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <div class="tab active" onclick="showTab('tabOverview',this)">Overview</div>
+        <div class="tab" onclick="showTab('tabGuests',this);loadEventGuests()">Guests</div>
+        <div class="tab" onclick="showTab('tabQuestions',this);loadQuestions()">RSVP Form</div>
+        <div class="tab" onclick="showTab('tabMessages',this)">Messages</div>
+      </div>
+
+      <!-- Overview tab -->
+      <div class="tab-pane active" id="tabOverview">
+        <div class="stats-grid" id="eventStats"></div>
+        <div class="card">
+          <div class="card-head"><h2>Event Details</h2><button class="btn btn-pri btn-sm" onclick="saveEventDetails()">Save Changes</button></div>
+          <div class="card-body">
+            <div class="form-grid">
+              <div class="fg"><label>Event Name *</label><input id="evName" type="text"></div>
+              <div class="fg"><label>Status</label>
+                <select id="evStatus"><option value="draft">Draft</option><option value="active">Active</option><option value="closed">Closed</option></select></div>
+              <div class="fg"><label>Start Date & Time *</label><input id="evDate" type="datetime-local"></div>
+              <div class="fg"><label>End Date & Time</label><input id="evEndDate" type="datetime-local"></div>
+              <div class="fg"><label>Venue Name</label><input id="evVenueName" type="text"></div>
+              <div class="fg"><label>Venue Address</label><input id="evVenueAddr" type="text"><small>Used for Google Maps embed</small></div>
+              <div class="fg"><label>Venue Lat</label><input id="evLat" type="number" step="any" placeholder="51.5074"></div>
+              <div class="fg"><label>Venue Lng</label><input id="evLng" type="number" step="any" placeholder="-0.1278"></div>
+              <div class="fg"><label>Hero Image URL</label><input id="evHero" type="url" placeholder="https://..."></div>
+              <div class="fg"><label>Dress Code</label><input id="evDress" type="text" placeholder="Black tie, Smart casual…"></div>
+              <div class="fg"><label>RSVP Deadline</label><input id="evDeadline" type="date"></div>
+              <div class="fg"><label>Max Guests</label><input id="evMax" type="number" min="1"></div>
+              <div class="fg span2"><label>Description</label><textarea id="evDesc" rows="4"></textarea></div>
+              <div class="fg"><label>Allow Plus One</label>
+                <select id="evPlusOne"><option value="false">No</option><option value="true">Yes</option></select></div>
+              <div class="fg"><label>Check-in PIN</label><input id="evPin" type="text" placeholder="4-digit PIN for check-in app"></div>
+              <div class="fg"><label>Email From Name</label><input id="evFromName" type="text" placeholder="Your Event Team"></div>
+              <div class="fg"><label>Email Reply-to</label><input id="evReplyTo" type="email"></div>
+              <div class="fg span2"><label>Email Subject</label><input id="evSubject" type="text" placeholder="You're invited…"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Guests tab -->
+      <div class="tab-pane" id="tabGuests">
+        <div class="page-head" style="margin-bottom:16px">
+          <div></div>
+          <div class="page-head-right">
+            <button class="btn btn-sec btn-sm" onclick="openCopyGuests()">Copy from event…</button>
+            <button class="btn btn-pri btn-sm" onclick="openAddGuest()">+ Add Guest</button>
+          </div>
+        </div>
+        <div class="search-row">
+          <input class="search-input" id="guestSearch" placeholder="Search guests…" oninput="filterGuestTable()">
+          <button class="btn btn-warn btn-sm" onclick="sendInvitations()">📨 Send Invitations</button>
+          <button class="btn btn-sec btn-sm" onclick="sendReminders()">🔔 Send Reminders</button>
+          <button class="btn btn-sec btn-sm" onclick="exportGuestCSV()">↓ Export CSV</button>
+        </div>
+        <div class="card">
+          <div class="tbl-wrap">
+            <table id="guestTable">
+              <thead><tr>
+                <th><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
+                <th>Name</th><th>Email</th><th>Company</th>
+                <th>Status</th><th>Checked In</th><th>Invited</th><th>Actions</th>
+              </tr></thead>
+              <tbody id="guestTbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Questions tab -->
+      <div class="tab-pane" id="tabQuestions">
+        <div class="card">
+          <div class="card-head">
+            <h2>Custom RSVP Questions</h2>
+            <button class="btn btn-pri btn-sm" onclick="openAddQuestion()">+ Add Question</button>
+          </div>
+          <div class="card-body">
+            <p style="font-size:13px;color:var(--muted);margin-bottom:16px">These questions appear on the RSVP page for guests who accept. Answers are visible in the guest list export.</p>
+            <div id="questionsList"></div>
+          </div>
+        </div>
+        <div style="margin-top:12px;padding:14px;background:#f0fdf4;border-radius:8px;border:1px solid #bbf7d0">
+          <p style="font-size:13px;color:#065f46"><strong>RSVP Page URL:</strong> <span id="rsvpUrlExample" style="font-family:monospace"></span></p>
+        </div>
+      </div>
+
+      <!-- Messages tab -->
+      <div class="tab-pane" id="tabMessages">
+        <div class="card">
+          <div class="card-head"><h2>Send Invitations</h2></div>
+          <div class="card-body">
+            <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Send invitation emails to all guests who haven't been invited yet, or to a selected group.</p>
+            <div style="display:flex;gap:12px;flex-wrap:wrap">
+              <button class="btn btn-pri" onclick="sendInvitations()">📨 Send to all uninvited guests</button>
+              <button class="btn btn-warn" onclick="sendReminders()">🔔 Send reminders to pending guests</button>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>Email Preview</h2></div>
+          <div class="card-body">
+            <p style="font-size:13px;color:var(--muted)">The invitation email uses the event's hero image, description, and links to the guest's unique RSVP page.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Guest database view -->
+    <div class="view" id="viewGuests">
+      <div class="page-head">
+        <h1>Guest Database</h1>
+        <div class="page-head-right">
+          <button class="btn btn-sec" onclick="openImportGuests()">↑ Import CSV</button>
+          <button class="btn btn-pri" onclick="openNewGuest()">+ Add Guest</button>
+        </div>
+      </div>
+      <div class="search-row">
+        <input class="search-input" id="masterSearch" placeholder="Search by name, email or company…" oninput="loadMasterGuests()">
+      </div>
+      <div class="card">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Company</th><th>Tags</th><th>Actions</th></tr></thead>
+            <tbody id="masterGuestTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div><!-- /page-content -->
+</div><!-- /app -->
+
+<!-- Modals -->
+<div class="modal-backdrop" id="modalBackdrop" onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modalBox">
+    <h2 id="modalTitle">Modal</h2>
+    <div id="modalBody"></div>
+    <div class="modal-footer" id="modalFooter"></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast-wrap" id="toastWrap"></div>
+
+<script>
+'use strict';
+
+let currentEventId = null;
+let allEventGuests = [];
+let allMasterGuests = [];
+
+// ── Auth ───────────────────────────────────────────────────────────────────
+async function doLogin() {
+  const email = document.getElementById('loginEmail').value;
+  const pass = document.getElementById('loginPass').value;
+  document.getElementById('loginErr').textContent = '';
+  try {
+    const r = await fetch('/admin/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email, password: pass}) });
+    const j = await r.json();
+    if (!r.ok) { document.getElementById('loginErr').textContent = j.error; return; }
+    document.getElementById('navUser').textContent = j.name;
+    document.getElementById('loginPage').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    loadEvents();
+  } catch (e) { document.getElementById('loginErr').textContent = 'Connection error'; }
+}
+
+async function doLogout() {
+  await fetch('/admin/logout', { method:'POST' });
+  location.reload();
+}
+
+// Check session on load
+(async () => {
+  try {
+    const r = await fetch('/admin/me');
+    if (r.ok) {
+      const j = await r.json();
+      document.getElementById('navUser').textContent = j.name;
+      document.getElementById('loginPage').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+      loadEvents();
+    }
+  } catch {}
+})();
+
+// ── Navigation ─────────────────────────────────────────────────────────────
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('view' + name.charAt(0).toUpperCase() + name.slice(1)).classList.add('active');
+  const tabs = { events: 0, guests: 1 };
+  const idx = tabs[name];
+  if (idx !== undefined) document.querySelectorAll('.nav-tab')[idx]?.classList.add('active');
+  if (name === 'guests') loadMasterGuests();
+}
+
+function showTab(tabId, el) {
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(tabId).classList.add('active');
+  el.classList.add('active');
+}
+
+// ── Events ─────────────────────────────────────────────────────────────────
+async function loadEvents() {
+  const grid = document.getElementById('eventGrid');
+  grid.innerHTML = '<div style="color:var(--muted);padding:20px">Loading…</div>';
+  const events = await apiFetch('/api/events');
+  if (!events || !events.length) {
+    grid.innerHTML = '<div style="color:var(--muted);padding:20px">No events yet. Create your first event.</div>';
+    return;
+  }
+  grid.innerHTML = events.map(ev => `
+    <div class="event-card" onclick="openEvent(${ev.id})">
+      <div class="event-card-hero">
+        ${ev.hero_image_url ? `<img src="${escH(ev.hero_image_url)}" alt="">` : ''}
+      </div>
+      <div class="event-card-body">
+        <div class="event-card-name">${escH(ev.name)}</div>
+        <div class="event-card-meta">
+          📅 ${fmtDate(ev.event_date)}<br>
+          ${ev.venue_name ? '📍 ' + escH(ev.venue_name) : ''}
+        </div>
+        <div style="margin-bottom:10px">
+          <span class="badge badge-${ev.status}">${ev.status}</span>
+        </div>
+        <div class="event-card-stats">
+          <div class="ec-stat"><strong>${ev.total_guests||0}</strong>&nbsp;guests</div>
+          <div class="ec-stat" style="color:#059669"><strong>${ev.accepted||0}</strong>&nbsp;accepted</div>
+          <div class="ec-stat" style="color:#d97706"><strong>${ev.pending||0}</strong>&nbsp;pending</div>
+          <div class="ec-stat" style="color:#dc2626"><strong>${ev.declined||0}</strong>&nbsp;declined</div>
+        </div>
+        ${ev.total_guests > 0 ? `
+        <div class="progress"><div class="progress-fill" style="width:${Math.round((ev.accepted||0)/ev.total_guests*100)}%"></div></div>
+        <div style="font-size:11px;color:var(--muted)">${Math.round((ev.accepted||0)/ev.total_guests*100)}% accepted</div>
+        ` : ''}
+      </div>
+    </div>`).join('');
+}
+
+async function openEvent(id) {
+  currentEventId = id;
+  showView('event');
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', i===0));
+  document.querySelectorAll('.tab-pane').forEach((p,i) => p.classList.toggle('active', i===0));
+  const ev = await apiFetch(`/api/events/${id}`);
+  if (!ev) return;
+  document.getElementById('eventDetailName').textContent = ev.name;
+  document.getElementById('eventDetailBadge').textContent = ev.status;
+  document.getElementById('eventDetailBadge').className = `badge badge-${ev.status}`;
+  // Fill form
+  document.getElementById('evName').value = ev.name || '';
+  document.getElementById('evStatus').value = ev.status || 'draft';
+  document.getElementById('evDate').value = ev.event_date ? ev.event_date.slice(0,16) : '';
+  document.getElementById('evEndDate').value = ev.end_date ? ev.end_date.slice(0,16) : '';
+  document.getElementById('evVenueName').value = ev.venue_name || '';
+  document.getElementById('evVenueAddr').value = ev.venue_address || '';
+  document.getElementById('evLat').value = ev.venue_lat || '';
+  document.getElementById('evLng').value = ev.venue_lng || '';
+  document.getElementById('evHero').value = ev.hero_image_url || '';
+  document.getElementById('evDress').value = ev.dress_code || '';
+  document.getElementById('evDeadline').value = ev.rsvp_deadline ? ev.rsvp_deadline.slice(0,10) : '';
+  document.getElementById('evMax').value = ev.max_guests || '';
+  document.getElementById('evDesc').value = ev.description || '';
+  document.getElementById('evPlusOne').value = ev.allow_plus_one ? 'true' : 'false';
+  document.getElementById('evPin').value = ev.check_in_pin || '';
+  document.getElementById('evFromName').value = ev.email_from_name || '';
+  document.getElementById('evReplyTo').value = ev.email_reply_to || '';
+  document.getElementById('evSubject').value = ev.email_subject || '';
+  loadEventStats();
+}
+
+async function loadEventStats() {
+  const stats = await apiFetch(`/api/events/${currentEventId}/stats`);
+  if (!stats) return;
+  document.getElementById('eventStats').innerHTML = [
+    {num: stats.total, label: 'Total Guests'},
+    {num: stats.accepted, label: 'Accepted', color: '#059669'},
+    {num: stats.pending, label: 'Pending', color: '#D97706'},
+    {num: stats.declined, label: 'Declined', color: '#DC2626'},
+    {num: stats.checked_in, label: 'Checked In', color: '#7C3AED'},
+    {num: stats.invited, label: 'Invited'},
+  ].map(s => `<div class="stat-card">
+    <div class="stat-num" style="${s.color?'color:'+s.color:''}">${s.num||0}</div>
+    <div class="stat-label">${s.label}</div>
+  </div>`).join('');
+}
+
+async function saveEventDetails() {
+  const body = {
+    name: document.getElementById('evName').value,
+    event_date: document.getElementById('evDate').value,
+    end_date: document.getElementById('evEndDate').value || null,
+    venue_name: document.getElementById('evVenueName').value,
+    venue_address: document.getElementById('evVenueAddr').value,
+    venue_lat: document.getElementById('evLat').value || null,
+    venue_lng: document.getElementById('evLng').value || null,
+    hero_image_url: document.getElementById('evHero').value,
+    dress_code: document.getElementById('evDress').value,
+    rsvp_deadline: document.getElementById('evDeadline').value || null,
+    max_guests: document.getElementById('evMax').value || null,
+    description: document.getElementById('evDesc').value,
+    allow_plus_one: document.getElementById('evPlusOne').value === 'true',
+    check_in_pin: document.getElementById('evPin').value,
+    email_from_name: document.getElementById('evFromName').value,
+    email_reply_to: document.getElementById('evReplyTo').value,
+    email_subject: document.getElementById('evSubject').value,
+    status: document.getElementById('evStatus').value,
+  };
+  const r = await apiFetch(`/api/events/${currentEventId}`, { method:'PUT', body });
+  if (r) { toast('Changes saved', 'ok'); document.getElementById('eventDetailName').textContent = r.name; loadEvents(); }
+}
+
+function openCreateEvent() {
+  showModal('Create Event', `
+    <div class="form-grid">
+      <div class="fg"><label>Event Name *</label><input id="newEvName" type="text" placeholder="Summer Gala 2026"></div>
+      <div class="fg"><label>Status</label>
+        <select id="newEvStatus"><option value="draft">Draft</option><option value="active">Active</option></select></div>
+      <div class="fg"><label>Start Date & Time *</label><input id="newEvDate" type="datetime-local"></div>
+      <div class="fg"><label>Venue Name</label><input id="newEvVenue" type="text"></div>
+    </div>`,
+    [{label:'Cancel',fn:'closeModal',cls:'btn-sec'},{label:'Create Event',fn:'doCreateEvent',cls:'btn-pri'}]);
+}
+
+async function doCreateEvent() {
+  const name = document.getElementById('newEvName').value.trim();
+  const event_date = document.getElementById('newEvDate').value;
+  if (!name || !event_date) { toast('Name and date are required','err'); return; }
+  const ev = await apiFetch('/api/events', { method:'POST', body: {
+    name, event_date, status: document.getElementById('newEvStatus').value,
+    venue_name: document.getElementById('newEvVenue').value
+  }});
+  if (ev) { closeModal(); toast('Event created','ok'); loadEvents(); openEvent(ev.id); }
+}
+
+async function deleteCurrentEvent() {
+  if (!confirm('Delete this event and all its guest data? This cannot be undone.')) return;
+  const r = await fetch(`/api/events/${currentEventId}`, { method:'DELETE' });
+  if (r.ok) { toast('Event deleted'); showView('events'); loadEvents(); }
+  else toast('Delete failed','err');
+}
+
+// ── Event Guests ───────────────────────────────────────────────────────────
+async function loadEventGuests() {
+  const tbody = document.getElementById('guestTbody');
+  tbody.innerHTML = '<tr><td colspan="8" style="color:var(--muted);padding:20px">Loading…</td></tr>';
+  allEventGuests = await apiFetch(`/api/events/${currentEventId}/guests`) || [];
+  renderGuestTable(allEventGuests);
+}
+
+function renderGuestTable(guests) {
+  const tbody = document.getElementById('guestTbody');
+  if (!guests.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="color:var(--muted);padding:20px">No guests yet. Add guests or copy from another event.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = guests.map(g => `
+    <tr>
+      <td><input type="checkbox" class="guest-cb" value="${g.guest_id}"></td>
+      <td><strong>${escH(g.first_name)} ${escH(g.last_name)}</strong></td>
+      <td>${escH(g.email)}</td>
+      <td>${escH(g.company||'')}</td>
+      <td><span class="badge badge-${g.status}">${g.status}</span></td>
+      <td>${g.checked_in_at ? '✓ ' + new Date(g.checked_in_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}) : '—'}</td>
+      <td>${g.invitation_sent_at ? '✓' : '—'}</td>
+      <td style="white-space:nowrap">
+        <a class="btn btn-sec btn-sm" href="/rsvp/${g.rsvp_code}" target="_blank">RSVP link</a>
+        <button class="btn btn-err btn-sm" onclick="removeGuest(${g.guest_id})">Remove</button>
+      </td>
+    </tr>`).join('');
+}
+
+function filterGuestTable() {
+  const q = document.getElementById('guestSearch').value.toLowerCase();
+  if (!q) { renderGuestTable(allEventGuests); return; }
+  renderGuestTable(allEventGuests.filter(g =>
+    (g.first_name+' '+g.last_name+g.email+(g.company||'')).toLowerCase().includes(q)));
+}
+
+function toggleSelectAll() {
+  const checked = document.getElementById('selectAll').checked;
+  document.querySelectorAll('.guest-cb').forEach(cb => cb.checked = checked);
+}
+
+function getSelectedGuestIds() {
+  return [...document.querySelectorAll('.guest-cb:checked')].map(cb => parseInt(cb.value));
+}
+
+async function removeGuest(guestId) {
+  if (!confirm('Remove this guest from the event?')) return;
+  const r = await fetch(`/api/events/${currentEventId}/guests/${guestId}`, { method:'DELETE' });
+  if (r.ok) { toast('Guest removed'); loadEventGuests(); loadEventStats(); }
+  else toast('Failed to remove guest','err');
+}
+
+function openAddGuest() {
+  showModal('Add Guest to Event', `
+    <div class="guest-picker">
+      <input class="guest-picker-search" id="pickerSearch" placeholder="Search guest database…" oninput="searchPicker()">
+      <div class="guest-picker-list" id="pickerList"><div style="padding:14px;color:var(--muted);font-size:13px">Type to search guests…</div></div>
+    </div>
+    <p style="font-size:12px;color:var(--muted)">Can't find them? <a href="#" onclick="showView('guests');closeModal()" style="color:var(--acc)">Add to guest database first</a></p>`,
+    [{label:'Cancel',fn:'closeModal',cls:'btn-sec'}]);
+  loadPickerGuests();
+}
+
+let pickerSelected = null;
+async function loadPickerGuests(q) {
+  const url = q ? `/api/guests?q=${encodeURIComponent(q)}` : '/api/guests';
+  const guests = await apiFetch(url) || [];
+  const inEvent = new Set(allEventGuests.map(eg => eg.guest_id));
+  document.getElementById('pickerList').innerHTML = guests.slice(0,40).map(g => `
+    <div class="guest-pick-item${inEvent.has(g.id)?' selected':''}" onclick="${inEvent.has(g.id)?'':'pickGuest('+g.id+')'}">
+      <div>
+        <strong>${escH(g.first_name)} ${escH(g.last_name)}</strong>
+        <span style="color:var(--muted);font-size:12px;margin-left:6px">${escH(g.email)}</span>
+      </div>
+      ${inEvent.has(g.id)?'<span style="font-size:11px;color:var(--ok)">✓ Added</span>':''}
+    </div>`).join('') || '<div style="padding:14px;color:var(--muted);font-size:13px">No guests found</div>';
+}
+
+let pickerTimer;
+function searchPicker() {
+  clearTimeout(pickerTimer);
+  pickerTimer = setTimeout(() => loadPickerGuests(document.getElementById('pickerSearch').value), 250);
+}
+
+async function pickGuest(guestId) {
+  const r = await apiFetch(`/api/events/${currentEventId}/guests`, { method:'POST', body: { guest_id: guestId }});
+  if (r) { toast('Guest added','ok'); loadEventGuests(); loadEventStats(); loadPickerGuests(document.getElementById('pickerSearch').value); }
+}
+
+function openCopyGuests() {
+  apiFetch('/api/events').then(events => {
+    const others = (events||[]).filter(e => e.id !== currentEventId);
+    showModal('Copy Guest List', `
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Copy all guests from a previous event to this one. Guests already in this event will be skipped.</p>
+      <div class="fg"><label>Source Event</label>
+        <select id="copySourceId">
+          <option value="">Select an event…</option>
+          ${others.map(e=>`<option value="${e.id}">${escH(e.name)} (${fmtDate(e.event_date)})</option>`).join('')}
+        </select></div>`,
+      [{label:'Cancel',fn:'closeModal',cls:'btn-sec'},{label:'Copy Guests',fn:'doCopyGuests',cls:'btn-pri'}]);
+  });
+}
+
+async function doCopyGuests() {
+  const sourceId = document.getElementById('copySourceId').value;
+  if (!sourceId) { toast('Select a source event','err'); return; }
+  const r = await apiFetch(`/api/events/${currentEventId}/copy-guests-from/${sourceId}`, { method:'POST', body:{} });
+  if (r) { closeModal(); toast(`Added ${r.added} guests, skipped ${r.skipped}`,'ok'); loadEventGuests(); loadEventStats(); }
+}
+
+async function sendInvitations() {
+  const selected = getSelectedGuestIds();
+  const msg = selected.length
+    ? `Send invitations to ${selected.length} selected guest(s)?`
+    : 'Send invitations to all guests in this event?';
+  if (!confirm(msg)) return;
+  const body = selected.length ? { guest_ids: selected } : {};
+  const r = await apiFetch(`/api/events/${currentEventId}/send-invitations`, { method:'POST', body });
+  if (r) toast(`Sent ${r.sent}, failed ${r.failed}`, r.failed ? 'warn' : 'ok');
+}
+
+async function sendReminders() {
+  if (!confirm('Send reminders to all pending guests?')) return;
+  const r = await apiFetch(`/api/events/${currentEventId}/send-reminders`, { method:'POST', body:{} });
+  if (r) toast(`Sent ${r.sent} reminders`, 'ok');
+}
+
+function exportGuestCSV() {
+  const guests = allEventGuests;
+  if (!guests.length) { toast('No guests to export','err'); return; }
+  const headers = ['First Name','Last Name','Email','Company','Status','Checked In','Invited','RSVP Code','Plus One','Dietary'];
+  const rows = guests.map(g => [
+    g.first_name, g.last_name, g.email, g.company||'',
+    g.status, g.checked_in_at ? new Date(g.checked_in_at).toLocaleString('en-GB') : '',
+    g.invitation_sent_at ? 'Yes' : 'No',
+    g.rsvp_code, g.plus_one_name||'', g.dietary_requirements||''
+  ].map(v => `"${String(v).replace(/"/g,'""')}"`));
+  const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'}));
+  a.download = `guests-event-${currentEventId}.csv`;
+  a.click();
+}
+
+// ── Questions ──────────────────────────────────────────────────────────────
+async function loadQuestions() {
+  const qs = await apiFetch(`/api/events/${currentEventId}/questions`) || [];
+  document.getElementById('rsvpUrlExample').textContent = window.location.origin + '/rsvp/XXXXXXXX';
+  const list = document.getElementById('questionsList');
+  if (!qs.length) {
+    list.innerHTML = '<div style="color:var(--muted);font-size:13px">No custom questions yet. Add questions to collect additional information from guests.</div>';
+    return;
+  }
+  list.innerHTML = qs.map(q => `
+    <div class="q-item">
+      <div class="q-item-text">${escH(q.question_text)}${q.required?' <span style="color:var(--err)">*</span>':''}</div>
+      <span class="q-item-type">${q.question_type}</span>
+      <button class="btn btn-sec btn-sm" onclick="editQuestion(${JSON.stringify(q).replace(/"/g,'&quot;')})">Edit</button>
+      <button class="btn btn-err btn-sm" onclick="deleteQuestion(${q.id})">Delete</button>
+    </div>`).join('');
+}
+
+function openAddQuestion() {
+  showModal('Add RSVP Question', questionForm(),
+    [{label:'Cancel',fn:'closeModal',cls:'btn-sec'},{label:'Add Question',fn:'doSaveQuestion',cls:'btn-pri'}]);
+}
+
+function editQuestion(q) {
+  showModal('Edit Question', questionForm(q),
+    [{label:'Cancel',fn:'closeModal',cls:'btn-sec'},{label:'Save',fn:`doSaveQuestion(${q.id})`,cls:'btn-pri'}]);
+  setTimeout(() => {
+    document.getElementById('qText').value = q.question_text;
+    document.getElementById('qType').value = q.question_type;
+    document.getElementById('qRequired').checked = q.required;
+    if (q.options) document.getElementById('qOptions').value = q.options.join('\n');
+    toggleQOptions();
+  }, 50);
+}
+
+function questionForm(q) {
+  return `<div class="fg" style="margin-bottom:14px"><label>Question *</label><input id="qText" type="text" placeholder="e.g. What is your dietary requirement?"></div>
+  <div class="form-grid cols-1">
+    <div class="fg"><label>Type</label>
+      <select id="qType" onchange="toggleQOptions()">
+        <option value="text">Short text</option>
+        <option value="textarea">Long text</option>
+        <option value="select">Dropdown</option>
+      </select></div>
+    <div class="fg" id="qOptionsWrap" style="display:none"><label>Options (one per line)</label>
+      <textarea id="qOptions" rows="4" placeholder="Option 1&#10;Option 2&#10;Option 3"></textarea></div>
+    <div class="fg"><label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+      <input type="checkbox" id="qRequired"> Required</label></div>
+  </div>`;
+}
+
+function toggleQOptions() {
+  const t = document.getElementById('qType').value;
+  document.getElementById('qOptionsWrap').style.display = t === 'select' ? 'block' : 'none';
+}
+
+async function doSaveQuestion(existingId) {
+  const text = document.getElementById('qText').value.trim();
+  if (!text) { toast('Question text required','err'); return; }
+  const type = document.getElementById('qType').value;
+  const required = document.getElementById('qRequired').checked;
+  const optionsRaw = document.getElementById('qOptions')?.value || '';
+  const options = type === 'select' ? optionsRaw.split('\n').map(s=>s.trim()).filter(Boolean) : null;
+  const body = { question_text: text, question_type: type, required, options };
+  const url = existingId
+    ? `/api/events/${currentEventId}/questions/${existingId}`
+    : `/api/events/${currentEventId}/questions`;
+  const r = await apiFetch(url, { method: existingId ? 'PUT' : 'POST', body });
+  if (r) { closeModal(); toast('Saved','ok'); loadQuestions(); }
+}
+
+async function deleteQuestion(qid) {
+  if (!confirm('Delete this question?')) return;
+  const r = await fetch(`/api/events/${currentEventId}/questions/${qid}`, { method:'DELETE' });
+  if (r.ok) { toast('Deleted'); loadQuestions(); }
+  else toast('Delete failed','err');
+}
+
+// ── Master Guest Database ──────────────────────────────────────────────────
+async function loadMasterGuests() {
+  const q = document.getElementById('masterSearch').value;
+  const url = q ? `/api/guests?q=${encodeURIComponent(q)}` : '/api/guests';
+  allMasterGuests = await apiFetch(url) || [];
+  const tbody = document.getElementById('masterGuestTbody');
+  if (!allMasterGuests.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="color:var(--muted);padding:20px">No guests found</td></tr>';
+    return;
+  }
+  tbody.innerHTML = allMasterGuests.map(g => `
+    <tr>
+      <td><strong>${escH(g.first_name)} ${escH(g.last_name)}</strong></td>
+      <td>${escH(g.email)}</td>
+      <td>${escH(g.phone||'')}</td>
+      <td>${escH(g.company||'')}</td>
+      <td>${escH(g.tags||'')}</td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-sec btn-sm" onclick="openEditGuest(${g.id})">Edit</button>
+        <button class="btn btn-err btn-sm" onclick="deleteMasterGuest(${g.id})">Delete</button>
+      </td>
+    </tr>`).join('');
+}
+
+function guestForm(g) {
+  return `<div class="form-grid">
+    <div class="fg"><label>First Name *</label><input id="gFirst" type="text" value="${escH(g?.first_name||'')}"></div>
+    <div class="fg"><label>Last Name *</label><input id="gLast" type="text" value="${escH(g?.last_name||'')}"></div>
+    <div class="fg"><label>Email *</label><input id="gEmail" type="email" value="${escH(g?.email||'')}"></div>
+    <div class="fg"><label>Phone</label><input id="gPhone" type="text" value="${escH(g?.phone||'')}"></div>
+    <div class="fg"><label>Company</label><input id="gCompany" type="text" value="${escH(g?.company||'')}"></div>
+    <div class="fg"><label>Tags</label><input id="gTags" type="text" value="${escH(g?.tags||'')}" placeholder="vip, press, speaker"></div>
+    <div class="fg span2"><label>Notes</label><textarea id="gNotes" rows="2">${escH(g?.notes||'')}</textarea></div>
+  </div>`;
+}
+
+function openNewGuest() {
+  showModal('Add Guest', guestForm(),
+    [{label:'Cancel',fn:'closeModal',cls:'btn-sec'},{label:'Add Guest',fn:'doSaveMasterGuest()',cls:'btn-pri'}]);
+}
+
+function openEditGuest(id) {
+  const g = allMasterGuests.find(x => x.id === id);
+  if (!g) return;
+  showModal('Edit Guest', guestForm(g),
+    [{label:'Cancel',fn:'closeModal',cls:'btn-sec'},{label:'Save',fn:`doSaveMasterGuest(${id})`,cls:'btn-pri'}]);
+}
+
+async function doSaveMasterGuest(id) {
+  const body = {
+    first_name: document.getElementById('gFirst').value.trim(),
+    last_name: document.getElementById('gLast').value.trim(),
+    email: document.getElementById('gEmail').value.trim(),
+    phone: document.getElementById('gPhone').value.trim(),
+    company: document.getElementById('gCompany').value.trim(),
+    tags: document.getElementById('gTags').value.trim(),
+    notes: document.getElementById('gNotes').value.trim(),
+  };
+  if (!body.first_name || !body.email) { toast('First name and email required','err'); return; }
+  const url = id ? `/api/guests/${id}` : '/api/guests';
+  const r = await apiFetch(url, { method: id ? 'PUT' : 'POST', body });
+  if (r) { closeModal(); toast('Saved','ok'); loadMasterGuests(); }
+}
+
+async function deleteMasterGuest(id) {
+  if (!confirm('Delete this guest from the master database? They will be removed from all events.')) return;
+  const r = await fetch(`/api/guests/${id}`, { method:'DELETE' });
+  if (r.ok) { toast('Deleted'); loadMasterGuests(); }
+  else toast('Delete failed','err');
+}
+
+function openImportGuests() {
+  showModal('Import Guests from CSV', `
+    <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Upload a CSV file with columns: <code>first_name, last_name, email, phone, company, tags</code></p>
+    <div class="fg"><label>CSV File</label><input type="file" id="csvFile" accept=".csv,.txt"></div>
+    <div id="importResult" style="margin-top:12px"></div>`,
+    [{label:'Cancel',fn:'closeModal',cls:'btn-sec'},{label:'Import',fn:'doImportCSV',cls:'btn-pri'}]);
+}
+
+async function doImportCSV() {
+  const file = document.getElementById('csvFile').files[0];
+  if (!file) { toast('Select a file','err'); return; }
+  const csv = await file.text();
+  const r = await apiFetch('/api/guests/import', { method:'POST', body: { csv } });
+  if (r) {
+    document.getElementById('importResult').innerHTML =
+      `<div style="background:#d1fae5;color:#065f46;padding:12px;border-radius:6px;font-size:13px">
+        ✓ Imported ${r.imported} guests, skipped ${r.skipped}.
+        ${r.errors.length ? '<br>Errors: ' + r.errors.slice(0,3).join('; ') : ''}
+      </div>`;
+    loadMasterGuests();
+  }
+}
+
+// ── Modal ──────────────────────────────────────────────────────────────────
+function showModal(title, body, buttons) {
+  document.getElementById('modalTitle').textContent = title;
+  document.getElementById('modalBody').innerHTML = body;
+  document.getElementById('modalFooter').innerHTML = (buttons||[]).map(b =>
+    `<button class="btn ${b.cls}" onclick="${b.fn}">${b.label}</button>`).join('');
+  document.getElementById('modalBackdrop').classList.add('show');
+}
+
+function closeModal() {
+  document.getElementById('modalBackdrop').classList.remove('show');
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────
+function toast(msg, type) {
+  const wrap = document.getElementById('toastWrap');
+  const el = document.createElement('div');
+  el.className = 'toast' + (type ? ' '+type : '');
+  el.textContent = msg;
+  wrap.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// ── Utils ──────────────────────────────────────────────────────────────────
+async function apiFetch(url, opts) {
+  try {
+    const r = await fetch(url, {
+      method: opts?.method || 'GET',
+      headers: opts?.body ? { 'Content-Type':'application/json' } : {},
+      body: opts?.body ? JSON.stringify(opts.body) : undefined,
+    });
+    const j = await r.json();
+    if (!r.ok) { toast(j.error || 'Error', 'err'); return null; }
+    return j;
+  } catch (e) { toast('Network error', 'err'); return null; }
+}
+
+function escH(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function fmtDate(d) {
+  if (!d) return '';
+  return new Date(d).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
+}
+</script>
+</body>
+</html>
