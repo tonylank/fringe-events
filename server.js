@@ -496,15 +496,12 @@ h1,h2,h3,.mini-card h2{font-family:'Playfair Display',Georgia,serif}
       <strong>📅 ${fmtDate(event.event_date)}</strong> at <strong>${fmtTime(event.event_date)}</strong><br>
       ${event.venue_name?`📍 <strong>${esc(event.venue_name)}</strong>${event.venue_address?', '+esc(event.venue_address):''}` : ''}
       ${event.dress_code?`<br>👔 Dress code: <strong>${esc(event.dress_code)}</strong>`:''}
+      ${event.accessibility_info?`<br><a href="#" style="font-size:13px;color:#7C3AED;text-decoration:underline;text-underline-offset:2px" onclick="event.preventDefault();document.getElementById('accessModal').classList.add('open')">Accessibility information</a>`:''}
     </div>
     ${event.description?`<div class="desc">${esc(event.description).replace(/\n/g,'<br>')}</div>`:''}
     <p style="font-size:15px;color:#444">Dear <strong>${esc(guest.first_name)} ${esc(guest.last_name)}</strong>,</p>
     ${statusBanner}
     ${event.rsvp_deadline?`<p style="font-size:13px;color:#888;margin-top:10px">Please respond by <strong>${new Date(event.rsvp_deadline).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}</strong></p>`:''}
-    ${event.accessibility_info?`<button class="access-btn" onclick="document.getElementById('accessModal').classList.add('open')">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="8" r="1" fill="currentColor" stroke="none"/><path d="M12 11v6"/><path d="M9 17h6"/></svg>
-      View venue accessibility details
-    </button>`:''}
   </div>
 
   ${event.accessibility_info?`
