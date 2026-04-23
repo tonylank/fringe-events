@@ -332,7 +332,7 @@ tr:hover td{background:#fafafa}
       <div class="card">
         <div class="tbl-wrap">
           <table>
-            <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Company</th><th>Tags</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Company</th><th>Tags</th><th>Events</th><th>Actions</th></tr></thead>
             <tbody id="masterGuestTbody"></tbody>
           </table>
         </div>
@@ -783,7 +783,7 @@ async function loadMasterGuests() {
   allMasterGuests = await apiFetch(url) || [];
   const tbody = document.getElementById('masterGuestTbody');
   if (!allMasterGuests.length) {
-    tbody.innerHTML = '<tr><td colspan="6" style="color:var(--muted);padding:20px">No guests found</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="color:var(--muted);padding:20px">No guests found</td></tr>';
     return;
   }
   tbody.innerHTML = allMasterGuests.map(g => `
@@ -793,11 +793,48 @@ async function loadMasterGuests() {
       <td>${escH(g.phone||'')}</td>
       <td>${escH(g.company||'')}</td>
       <td>${escH(g.tags||'')}</td>
+      <td>
+        <button class="btn btn-sec btn-sm" onclick="openGuestHistory(${g.id},'${escH(g.first_name)} ${escH(g.last_name)}')">
+          History
+        </button>
+      </td>
       <td style="white-space:nowrap">
         <button class="btn btn-sec btn-sm" onclick="openEditGuest(${g.id})">Edit</button>
         <button class="btn btn-err btn-sm" onclick="deleteMasterGuest(${g.id})">Delete</button>
       </td>
     </tr>`).join('');
+}
+
+async function openGuestHistory(guestId, guestName) {
+  const events = await apiFetch(`/api/guests/${guestId}/events`) || [];
+  let body;
+  if (!events.length) {
+    body = '<p style="color:var(--muted);font-size:13px">This guest has not been invited to any events yet.</p>';
+  } else {
+    body = `<table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr>
+        <th style="text-align:left;padding:8px 10px;border-bottom:2px solid var(--border);color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Event</th>
+        <th style="text-align:left;padding:8px 10px;border-bottom:2px solid var(--border);color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Date</th>
+        <th style="text-align:left;padding:8px 10px;border-bottom:2px solid var(--border);color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">RSVP</th>
+        <th style="text-align:left;padding:8px 10px;border-bottom:2px solid var(--border);color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Attended</th>
+      </tr></thead>
+      <tbody>${events.map(e => {
+        const attended = e.checked_in_at
+          ? '<span style="color:#059669;font-weight:700">✓ Yes</span>'
+          : e.status === 'accepted'
+          ? '<span style="color:var(--muted)">No (accepted)</span>'
+          : '—';
+        const rsvpBadge = `<span class="badge badge-${e.status}">${e.status}</span>`;
+        return `<tr>
+          <td style="padding:10px;border-bottom:1px solid var(--border)"><strong>${escH(e.name)}</strong></td>
+          <td style="padding:10px;border-bottom:1px solid var(--border)">${fmtDate(e.event_date)}</td>
+          <td style="padding:10px;border-bottom:1px solid var(--border)">${rsvpBadge}</td>
+          <td style="padding:10px;border-bottom:1px solid var(--border)">${attended}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>`;
+  }
+  showModal(`${guestName} — Event History`, body, [{label:'Close',fn:'closeModal',cls:'btn-sec'}]);
 }
 
 function guestForm(g) {

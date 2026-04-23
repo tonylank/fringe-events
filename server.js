@@ -589,6 +589,20 @@ app.delete('/api/guests/:id', requireAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Guest event history
+app.get('/api/guests/:id/events', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT e.id, e.name, e.event_date, e.slug,
+             eg.status, eg.checked_in_at, eg.invitation_sent_at, eg.rsvp_code
+      FROM event_guests eg
+      JOIN events e ON e.id = eg.event_id
+      WHERE eg.guest_id = $1
+      ORDER BY e.event_date DESC`, [req.params.id]);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Import guests from CSV
 app.post('/api/guests/import', requireAuth, async (req, res) => {
   const { csv } = req.body; // raw CSV string
