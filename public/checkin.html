@@ -7,13 +7,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-:root{--pri:#2D1B69;--acc:#7C3AED;--ok:#059669;--err:#DC2626;--border:#E5E7EB;--muted:#6B7280}
+:root{--pri:#2D1B69;--acc:#7C3AED;--ok:#059669;--err:#DC2626;--warn:#D97706;--border:#E5E7EB;--muted:#6B7280}
 body{font-family:'DM Sans',-apple-system,sans-serif;background:#0f0720;min-height:100vh;color:#fff}
 .header h1,.pin-card h2{font-family:'Playfair Display',Georgia,serif}
 .header{background:var(--pri);padding:16px 20px;display:flex;align-items:center;justify-content:space-between}
 .header h1{font-size:17px;font-weight:700}
 .header .event-name{font-size:13px;color:rgba(255,255,255,.65);margin-top:2px}
-.content{padding:20px;max-width:600px;margin:0 auto}
 
 /* PIN gate */
 #pinGate{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
@@ -38,23 +37,47 @@ body{font-family:'DM Sans',-apple-system,sans-serif;background:#0f0720;min-heigh
 .result-card{background:#fff;color:#111;border-radius:12px;margin-bottom:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.3)}
 .result-card.checked{border-left:5px solid var(--ok)}
 .result-card.declined{border-left:5px solid var(--err);opacity:.75}
-.result-main{padding:16px;display:flex;align-items:center;gap:14px}
+.result-main{padding:16px;display:flex;align-items:center;gap:14px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.result-main:active{background:#f9fafb}
 .result-avatar{width:44px;height:44px;border-radius:50%;background:var(--pri);color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;flex-shrink:0}
-.result-info{flex:1}
+.result-info{flex:1;min-width:0}
 .result-name{font-size:16px;font-weight:700;color:#111;margin-bottom:2px}
-.result-email{font-size:12px;color:var(--muted)}
-.result-status{font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;white-space:nowrap}
+.result-email{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.result-badges{display:flex;gap:5px;margin-top:5px;flex-wrap:wrap}
+.badge-dietary{background:#FEF3C7;color:#92400E;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px}
+.badge-access{background:#EDE9FE;color:#5B21B6;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px}
+.result-status{font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;white-space:nowrap;flex-shrink:0}
 .rs-pending{background:#FEF3C7;color:#92400E}
 .rs-accepted{background:#D1FAE5;color:#065F46}
 .rs-declined{background:#FEE2E2;color:#991B1B}
 .rs-checked{background:#D1FAE5;color:#065F46}
-.result-actions{padding:0 16px 14px;display:flex;gap:8px}
-.btn-checkin{flex:1;padding:12px;background:var(--ok);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer}
+
+/* Requirements detail panel */
+.req-panel{display:none;background:#f8f7ff;border-top:1px solid #e5e7eb;padding:12px 16px}
+.req-panel.open{display:block}
+.req-row{margin-bottom:8px;font-size:13px}
+.req-row:last-child{margin-bottom:0}
+.req-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:2px}
+.req-text{color:#111;line-height:1.5}
+
+/* Actions */
+.result-actions{padding:0 16px 14px;display:flex;gap:8px;flex-wrap:wrap}
+.btn-checkin{flex:1;padding:12px;background:var(--ok);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;min-width:120px}
 .btn-checkin:hover{opacity:.9}
 .btn-undo{padding:12px 16px;background:#f3f4f6;color:var(--muted);border:none;border-radius:8px;font-size:13px;cursor:pointer}
 .btn-undo:hover{background:#e5e7eb;color:#111}
-.checkin-time{font-size:12px;color:var(--ok);font-weight:600;padding:0 16px 10px}
-.plus-one{font-size:12px;color:var(--muted);margin-top:4px}
+.checkin-time{font-size:12px;color:var(--ok);font-weight:600;padding:0 16px 6px}
+
+/* Plus one section */
+.plusone-section{border-top:1px dashed #e5e7eb;margin:0 16px;padding:10px 0 14px}
+.plusone-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:8px}
+.plusone-row{display:flex;align-items:center;gap:10px}
+.plusone-name{font-size:14px;font-weight:600;color:#111;flex:1}
+.btn-checkin-po{padding:9px 14px;background:var(--ok);color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer}
+.btn-checkin-po:hover{opacity:.9}
+.btn-undo-po{padding:9px 12px;background:#f3f4f6;color:var(--muted);border:none;border-radius:7px;font-size:12px;cursor:pointer}
+.btn-undo-po:hover{background:#e5e7eb;color:#111}
+.po-checked-time{font-size:11px;color:var(--ok);font-weight:600}
 
 .empty{text-align:center;padding:48px 20px;color:rgba(255,255,255,.45)}
 .empty-icon{font-size:48px;margin-bottom:12px}
@@ -105,23 +128,16 @@ body{font-family:'DM Sans',-apple-system,sans-serif;background:#0f0720;min-heigh
 <script>
 'use strict';
 
-// Extract event slug from URL: /checkin/event-slug
 const pathParts = window.location.pathname.split('/');
 const eventSlug = pathParts[pathParts.length - 1];
 
 let eventId = null;
 let searchTimer;
 
-// Try to resolve event slug → id (we need an endpoint for this, or embed in page)
-// For now: the PIN auth endpoint will tell us the event ID after verifying slug via query param
-// We load the event list from the server to find the matching slug
-
 async function verifyPin() {
   const pin = document.getElementById('pinInput').value.trim();
   if (!pin) return;
   document.getElementById('pinErr').textContent = '';
-
-  // First find the event by slug
   try {
     const r = await fetch(`/api/checkin-page-init?slug=${encodeURIComponent(eventSlug)}&pin=${encodeURIComponent(pin)}`);
     const j = await r.json();
@@ -137,13 +153,15 @@ async function verifyPin() {
 
 async function loadStats() {
   try {
-    const r = await fetch(`/api/events/${eventId}/stats`);
+    const r = await fetch(`/api/checkin/${eventId}/stats`);
     const s = await r.json();
+    const accepted = parseInt(s.accepted)||0;
+    const checkedIn = parseInt(s.checked_in)||0;
     document.getElementById('statsBar').innerHTML = `
       <div class="stat"><strong>${s.total||0}</strong>Guests</div>
-      <div class="stat"><strong>${s.accepted||0}</strong>Accepted</div>
-      <div class="stat"><strong>${s.checked_in||0}</strong>Checked In</div>
-      <div class="stat"><strong>${(s.accepted||0)-(s.checked_in||0)}</strong>Remaining</div>`;
+      <div class="stat"><strong>${accepted}</strong>Accepted</div>
+      <div class="stat"><strong>${checkedIn}</strong>Checked In</div>
+      <div class="stat"><strong>${accepted - checkedIn}</strong>Remaining</div>`;
   } catch {}
 }
 
@@ -175,41 +193,87 @@ function renderResults(guests) {
     const initials = (g.first_name[0]||'') + (g.last_name[0]||'');
     const isIn = !!g.checked_in_at;
     const statusClass = isIn ? 'rs-checked' : `rs-${g.status}`;
-    const statusLabel = isIn ? `Checked in ${fmtTime(g.checked_in_at)}` : g.status;
+    const statusLabel = isIn ? `✓ ${fmtTime(g.checked_in_at)}` : g.status;
+    const hasDietary = !!(g.dietary_requirements && g.dietary_requirements.trim());
+    const hasAccess = !!(g.accessibility_needs && g.accessibility_needs.trim());
+    const hasReqs = hasDietary || hasAccess;
+
+    // Requirements detail panel
+    const reqPanel = hasReqs ? `
+      <div class="req-panel" id="req-${g.id}">
+        ${hasDietary ? `<div class="req-row"><div class="req-label">🍽 Dietary requirements</div><div class="req-text">${escH(g.dietary_requirements)}</div></div>` : ''}
+        ${hasAccess ? `<div class="req-row"><div class="req-label">♿ Accessibility needs</div><div class="req-text">${escH(g.accessibility_needs)}</div></div>` : ''}
+      </div>` : '';
+
+    // Plus one section
+    const poChecked = !!g.plus_one_checked_in_at;
+    const plusOneSection = g.plus_one_name ? `
+      <div class="plusone-section">
+        <div class="plusone-label">Plus One</div>
+        <div class="plusone-row">
+          <div class="plusone-name">+ ${escH(g.plus_one_name)}</div>
+          ${poChecked
+            ? `<span class="po-checked-time">✓ ${fmtTime(g.plus_one_checked_in_at)}</span>
+               <button class="btn-undo-po" onclick="uncheckInPlusOne(${g.id})">Undo</button>`
+            : `<button class="btn-checkin-po" onclick="checkInPlusOne(${g.id})">✓ Check In</button>`}
+        </div>
+      </div>` : '';
+
     return `<div class="result-card${isIn?' checked':g.status==='declined'?' declined':''}" id="rc-${g.id}">
-      <div class="result-main">
+      <div class="result-main" onclick="toggleReqs(${g.id},${hasReqs})">
         <div class="result-avatar">${initials}</div>
         <div class="result-info">
           <div class="result-name">${escH(g.first_name)} ${escH(g.last_name)}</div>
           <div class="result-email">${escH(g.email)}${g.company?' · '+escH(g.company):''}</div>
-          ${g.plus_one_name?`<div class="plus-one">+ ${escH(g.plus_one_name)}</div>`:''}
+          ${hasReqs ? `<div class="result-badges">
+            ${hasDietary ? '<span class="badge-dietary">🍽 Dietary</span>' : ''}
+            ${hasAccess ? '<span class="badge-access">♿ Accessibility</span>' : ''}
+          </div>` : ''}
         </div>
         <span class="result-status ${statusClass}">${statusLabel}</span>
       </div>
+      ${reqPanel}
+      ${isIn ? `<div class="checkin-time">Checked in at ${fmtTime(g.checked_in_at)}</div>` : ''}
+      ${plusOneSection}
       <div class="result-actions">
         ${isIn
           ? `<button class="btn-undo" onclick="uncheckIn(${g.id})">Undo check-in</button>`
-          : `<button class="btn-checkin" onclick="checkIn(${g.id})">✓ Check In</button>`
-        }
+          : `<button class="btn-checkin" onclick="checkIn(${g.id})">✓ Check In</button>`}
       </div>
     </div>`;
   }).join('');
 }
 
+function toggleReqs(id, hasReqs) {
+  if (!hasReqs) return;
+  const panel = document.getElementById(`req-${id}`);
+  if (panel) panel.classList.toggle('open');
+}
+
 async function checkIn(egId) {
   try {
     const r = await fetch(`/api/checkin/${eventId}/guests/${egId}/checkin`, { method:'POST' });
-    if (r.ok) {
-      showFlash('✓ Checked In!');
-      doSearch();
-      loadStats();
-    }
+    if (r.ok) { showFlash('✓ Checked In!'); doSearch(); loadStats(); }
   } catch {}
 }
 
 async function uncheckIn(egId) {
   try {
     const r = await fetch(`/api/checkin/${eventId}/guests/${egId}/uncheckin`, { method:'POST' });
+    if (r.ok) { doSearch(); loadStats(); }
+  } catch {}
+}
+
+async function checkInPlusOne(egId) {
+  try {
+    const r = await fetch(`/api/checkin/${eventId}/guests/${egId}/checkin-plusone`, { method:'POST' });
+    if (r.ok) { showFlash('✓ Plus One Checked In!'); doSearch(); loadStats(); }
+  } catch {}
+}
+
+async function uncheckInPlusOne(egId) {
+  try {
+    const r = await fetch(`/api/checkin/${eventId}/guests/${egId}/uncheckin-plusone`, { method:'POST' });
     if (r.ok) { doSearch(); loadStats(); }
   } catch {}
 }

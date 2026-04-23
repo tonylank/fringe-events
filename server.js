@@ -136,6 +136,7 @@ async function migrate() {
     await client.query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS hire_cost TEXT`);
     await client.query(`ALTER TABLE event_guests ADD COLUMN IF NOT EXISTS attendance_type TEXT DEFAULT 'in-person'`);
     await client.query(`ALTER TABLE event_guests ADD COLUMN IF NOT EXISTS accessibility_needs TEXT`);
+    await client.query(`ALTER TABLE event_guests ADD COLUMN IF NOT EXISTS plus_one_checked_in_at TIMESTAMPTZ`);
 
     // Seed default admin if none exists
     const { rows } = await client.query('SELECT COUNT(*) FROM admin_users');
@@ -1134,6 +1135,19 @@ app.post('/api/checkin/:eventId/auth', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Public stats for check-in page (no admin auth — PIN already verified client-side)
+app.get('/api/checkin/:eventId/stats', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT
+        COUNT(*) AS total,
+        COUNT(CASE WHEN status='accepted' THEN 1 END) AS accepted,
+        COUNT(CASE WHEN checked_in_at IS NOT NULL THEN 1 END) AS checked_in
+      FROM event_guests WHERE event_id=$1`, [req.params.eventId]);
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Search guests for check-in
 app.get('/api/checkin/:eventId/search', async (req, res) => {
   const { q } = req.query;
@@ -1141,6 +1155,7 @@ app.get('/api/checkin/:eventId/search', async (req, res) => {
   try {
     const { rows } = await pool.query(`
       SELECT eg.id, eg.rsvp_code, eg.status, eg.checked_in_at, eg.plus_one_name,
+             eg.plus_one_checked_in_at, eg.dietary_requirements, eg.accessibility_needs,
              g.first_name, g.last_name, g.email, g.company
       FROM event_guests eg JOIN guests g ON g.id=eg.guest_id
       WHERE eg.event_id=$1
@@ -1169,6 +1184,29 @@ app.post('/api/checkin/:eventId/guests/:egId/uncheckin', async (req, res) => {
   try {
     const { rows } = await pool.query(`
       UPDATE event_guests SET checked_in_at=NULL, checked_in_by=NULL
+      WHERE id=$1 AND event_id=$2 RETURNING *`,
+      [req.params.egId, req.params.eventId]);
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Check in plus one
+app.post('/api/checkin/:eventId/guests/:egId/checkin-plusone', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      UPDATE event_guests SET plus_one_checked_in_at=NOW()
+      WHERE id=$1 AND event_id=$2 AND plus_one_name IS NOT NULL RETURNING *`,
+      [req.params.egId, req.params.eventId]);
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Undo plus one check-in
+app.post('/api/checkin/:eventId/guests/:egId/uncheckin-plusone', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      UPDATE event_guests SET plus_one_checked_in_at=NULL
       WHERE id=$1 AND event_id=$2 RETURNING *`,
       [req.params.egId, req.params.eventId]);
     res.json(rows[0]);
