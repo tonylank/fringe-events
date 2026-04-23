@@ -108,6 +108,9 @@ async function migrate() {
       );
     `);
 
+    // Add hero_image_data column if missing (uploaded images stored as base64)
+    await client.query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS hero_image_data TEXT`);
+
     // Seed default admin if none exists
     const { rows } = await client.query('SELECT COUNT(*) FROM admin_users');
     if (parseInt(rows[0].count) === 0) {
@@ -126,12 +129,12 @@ async function migrate() {
 }
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
-// CSP — allow inline scripts/styles (app uses no external JS libs), Google Maps iframe, any img src
+// CSP — allow inline scripts/styles, Cropper.js CDN, Google Maps iframe, any img src
 app.use((req, res, next) => {
   res.setHeader('Content-Security-Policy',
     "default-src 'self'; " +
-    "script-src 'self' 'unsafe-inline'; " +
-    "style-src 'self' 'unsafe-inline'; " +
+    "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; " +
+    "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; " +
     "img-src * data: blob:; " +
     "connect-src 'self'; " +
     "frame-src https://www.google.com; " +
@@ -932,6 +935,34 @@ app.get('/api/events/:id/stats', requireAuth, async (req, res) => {
       FROM event_guests WHERE event_id=$1`, [req.params.id]);
     res.json(rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Hero Image Upload ────────────────────────────────────────────────────────
+// Accepts base64 JPEG from the crop tool, stores in DB, sets hero_image_url to serve endpoint
+app.post('/api/events/:id/hero', requireAuth, async (req, res) => {
+  const { image } = req.body; // base64 data URL: "data:image/jpeg;base64,..."
+  if (!image || !image.startsWith('data:image/')) return res.status(400).json({ error: 'Invalid image data' });
+  try {
+    const url = `/api/events/${req.params.id}/hero-image`;
+    await pool.query(
+      'UPDATE events SET hero_image_data=$1, hero_image_url=$2, updated_at=NOW() WHERE id=$3',
+      [image, url, req.params.id]);
+    res.json({ url });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Serve uploaded hero image publicly (used in RSVP pages + emails)
+app.get('/api/events/:id/hero-image', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT hero_image_data FROM events WHERE id=$1', [req.params.id]);
+    if (!rows.length || !rows[0].hero_image_data) return res.status(404).send('Not found');
+    const data = rows[0].hero_image_data;
+    const base64 = data.includes(',') ? data.split(',')[1] : data;
+    const buf = Buffer.from(base64, 'base64');
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Cache-Control', 'public, max-age=31536000');
+    res.send(buf);
+  } catch (e) { res.status(500).send('Error'); }
 });
 
 // Check-in page init — resolves slug + verifies PIN, returns eventId
