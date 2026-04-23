@@ -138,11 +138,11 @@ app.use((req, res, next) => {
   res.setHeader('Content-Security-Policy',
     "default-src 'self'; " +
     "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; " +
-    "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; " +
+    "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; " +
     "img-src * data: blob:; " +
     "connect-src 'self'; " +
     "frame-src https://www.google.com; " +
-    "font-src 'self' data:");
+    "font-src 'self' data: https://fonts.gstatic.com");
   next();
 });
 
@@ -219,7 +219,8 @@ function buildInvitationHtml(event, guest, eventGuest) {
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.venue_address)}`
     : null;
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<style>body{margin:0;background:#f4f4f8;font-family:Georgia,serif}.w{max-width:600px;margin:40px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08)}.hero{width:100%;height:200px;object-fit:cover;display:block;background:#2D1B69}.c{padding:40px}h1{margin:0 0 8px;font-size:28px;color:#2D1B69}.meta{color:#666;font-size:15px;margin-bottom:24px}.meta strong{color:#333}p{color:#444;line-height:1.7;font-size:16px}.btn{display:inline-block;margin:24px 0 12px;padding:16px 36px;background:#7C3AED;color:#fff!important;text-decoration:none;border-radius:8px;font-size:17px;font-weight:700}.ml{display:inline-block;margin-top:8px;color:#7C3AED;font-size:14px}.ft{padding:20px 40px;background:#f8f7ff;font-size:13px;color:#888;border-top:1px solid #eee}</style>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<style>body{margin:0;background:#f4f4f8;font-family:'DM Sans',-apple-system,sans-serif}.w{max-width:600px;margin:40px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08)}.hero{width:100%;height:200px;object-fit:cover;display:block;background:#2D1B69}.c{padding:40px}h1{margin:0 0 8px;font-size:28px;color:#2D1B69;font-family:'Playfair Display',Georgia,serif}.meta{color:#666;font-size:15px;margin-bottom:24px}.meta strong{color:#333}p{color:#444;line-height:1.7;font-size:16px}.btn{display:inline-block;margin:24px 0 12px;padding:16px 36px;background:#7C3AED;color:#fff!important;text-decoration:none;border-radius:8px;font-size:17px;font-weight:700}.ml{display:inline-block;margin-top:8px;color:#7C3AED;font-size:14px}.ft{padding:20px 40px;background:#f8f7ff;font-size:13px;color:#888;border-top:1px solid #eee}</style>
 </head><body><div class="w">
 ${event.hero_image_url?`<img class="hero" src="${esc(event.hero_image_url)}" alt="${esc(event.name)}">`:`<div class="hero"></div>`}
 <div class="c"><h1>${esc(event.name)}</h1>
@@ -264,7 +265,8 @@ async function sendRsvpConfirmation(event, guest, eventGuest) {
     : null;
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-<style>body{margin:0;background:#f4f4f8;font-family:Georgia,serif}.w{max-width:600px;margin:40px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08)}.hero{width:100%;height:180px;object-fit:cover;display:block;background:#059669}.c{padding:36px}h1{margin:0 0 6px;font-size:24px;color:#059669}p{color:#444;line-height:1.7;font-size:15px}.meta{color:#666;font-size:14px;margin:16px 0}.highlight{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin:20px 0}.link-btn{display:inline-block;margin:8px 4px 0;padding:11px 22px;border-radius:6px;font-size:14px;font-weight:700;text-decoration:none}.cal-g{background:#4285f4;color:#fff}.cal-i{background:#2D1B69;color:#fff}.maps{background:#ea4335;color:#fff}.ft{padding:20px 36px;background:#f8f7ff;font-size:12px;color:#888;border-top:1px solid #eee}</style>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<style>body{margin:0;background:#f4f4f8;font-family:'DM Sans',-apple-system,sans-serif}.w{max-width:600px;margin:40px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08)}.hero{width:100%;height:180px;object-fit:cover;display:block;background:#059669}.c{padding:36px}h1{margin:0 0 6px;font-size:24px;color:#059669;font-family:'Playfair Display',Georgia,serif}p{color:#444;line-height:1.7;font-size:15px}.meta{color:#666;font-size:14px;margin:16px 0}.highlight{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin:20px 0}.link-btn{display:inline-block;margin:8px 4px 0;padding:11px 22px;border-radius:6px;font-size:14px;font-weight:700;text-decoration:none}.cal-g{background:#4285f4;color:#fff}.cal-i{background:#2D1B69;color:#fff}.maps{background:#ea4335;color:#fff}.ft{padding:20px 36px;background:#f8f7ff;font-size:12px;color:#888;border-top:1px solid #eee}</style>
 </head><body><div class="w">
 ${event.hero_image_url?`<img class="hero" src="${BASE_URL.startsWith('http')?'':BASE_URL}${event.hero_image_url.startsWith('/')?(BASE_URL+event.hero_image_url):event.hero_image_url}" alt="">`:`<div class="hero"></div>`}
 <div class="c">
@@ -337,9 +339,11 @@ function renderRsvpPage(event, guest, eventGuest, questions, answers) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(event.name)} — RSVP</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:#0f0720;font-family:Georgia,'Times New Roman',serif;min-height:100vh;display:flex;align-items:center;justify-content:center}
+body{background:#0f0720;font-family:'DM Sans',-apple-system,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center}
+h1,h2,h3,.mini-card h2{font-family:'Playfair Display',Georgia,serif}
 
 /* Envelope */
 .scene{perspective:1200px;width:100%;max-width:500px;padding:60px 20px}
