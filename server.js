@@ -110,6 +110,10 @@ async function migrate() {
 
     // Add hero_image_data column if missing (uploaded images stored as base64)
     await client.query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS hero_image_data TEXT`);
+    await client.query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS hashtags TEXT`);
+    await client.query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS allow_online BOOLEAN DEFAULT false`);
+    await client.query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS online_link TEXT`);
+    await client.query(`ALTER TABLE event_guests ADD COLUMN IF NOT EXISTS attendance_type TEXT DEFAULT 'in-person'`);
 
     // Seed default admin if none exists
     const { rows } = await client.query('SELECT COUNT(*) FROM admin_users');
@@ -251,6 +255,51 @@ async function sendEmail({ to, toName, subject, html, text, attachments }) {
   });
 }
 
+async function sendRsvpConfirmation(event, guest, eventGuest) {
+  const isOnline = eventGuest.attendance_type === 'online';
+  const calUrl = `${BASE_URL}/rsvp/${eventGuest.rsvp_code}/calendar.ics`;
+  const gcal = `https://www.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(event.name)}&dates=${gcalDate(event.event_date)}/${gcalDate(event.end_date||event.event_date)}&location=${encodeURIComponent(isOnline ? (event.online_link||'') : [event.venue_name,event.venue_address].filter(Boolean).join(', '))}`;
+  const mapsUrl = !isOnline && event.venue_address
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.venue_address)}`
+    : null;
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>body{margin:0;background:#f4f4f8;font-family:Georgia,serif}.w{max-width:600px;margin:40px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08)}.hero{width:100%;height:180px;object-fit:cover;display:block;background:#059669}.c{padding:36px}h1{margin:0 0 6px;font-size:24px;color:#059669}p{color:#444;line-height:1.7;font-size:15px}.meta{color:#666;font-size:14px;margin:16px 0}.highlight{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin:20px 0}.link-btn{display:inline-block;margin:8px 4px 0;padding:11px 22px;border-radius:6px;font-size:14px;font-weight:700;text-decoration:none}.cal-g{background:#4285f4;color:#fff}.cal-i{background:#2D1B69;color:#fff}.maps{background:#ea4335;color:#fff}.ft{padding:20px 36px;background:#f8f7ff;font-size:12px;color:#888;border-top:1px solid #eee}</style>
+</head><body><div class="w">
+${event.hero_image_url?`<img class="hero" src="${BASE_URL.startsWith('http')?'':BASE_URL}${event.hero_image_url.startsWith('/')?(BASE_URL+event.hero_image_url):event.hero_image_url}" alt="">`:`<div class="hero"></div>`}
+<div class="c">
+<h1>✓ You're confirmed!</h1>
+<p>Hi ${esc(guest.first_name)}, we've received your RSVP for <strong>${esc(event.name)}</strong>.</p>
+<div class="meta">
+  <strong>📅 ${fmtDate(event.event_date)}</strong> at <strong>${fmtTime(event.event_date)}</strong><br>
+  ${isOnline ? '💻 Attending <strong>online</strong>' : event.venue_name ? `📍 ${esc(event.venue_name)}${event.venue_address?', '+esc(event.venue_address):''}` : ''}
+  ${event.dress_code&&!isOnline ? `<br>👔 Dress code: <strong>${esc(event.dress_code)}</strong>` : ''}
+</div>
+${isOnline && event.online_link ? `
+<div class="highlight">
+  <p style="margin:0 0 8px;font-weight:700;color:#065f46">Your online joining link:</p>
+  <a href="${esc(event.online_link)}" style="color:#7C3AED;font-size:14px;word-break:break-all">${esc(event.online_link)}</a>
+</div>` : ''}
+${eventGuest.plus_one_name ? `<p>We're also expecting <strong>${esc(eventGuest.plus_one_name)}</strong> as your guest.</p>` : ''}
+<p style="margin-top:20px">Add to your calendar:</p>
+<a class="link-btn cal-g" href="${gcal}" target="_blank">Google Calendar</a>
+<a class="link-btn cal-i" href="${calUrl}">Download .ics</a>
+${mapsUrl ? `<a class="link-btn maps" href="${mapsUrl}" target="_blank">Google Maps</a>` : ''}
+</div>
+<div class="ft">You received this because you RSVPd for ${esc(event.name)}. Need to change your response? Visit your <a href="${BASE_URL}/rsvp/${eventGuest.rsvp_code}" style="color:#7C3AED">RSVP page</a>.</div>
+</div></body></html>`;
+
+  const ics = generateICS(event, guest.email, `${guest.first_name} ${guest.last_name}`);
+  await sendEmail({
+    to: guest.email,
+    toName: `${guest.first_name} ${guest.last_name}`,
+    subject: `You're confirmed: ${event.name}`,
+    html,
+    text: `Hi ${guest.first_name}, you're confirmed for ${event.name} on ${fmtDate(event.event_date)}.${isOnline && event.online_link ? ' Join online: ' + event.online_link : ''}`,
+    attachments: [{ filename: `${event.slug||'event'}.ics`, content: ics, contentType: 'text/calendar' }]
+  });
+}
+
 // ─── RSVP Page Renderer ───────────────────────────────────────────────────────
 function renderRsvpPage(event, guest, eventGuest, questions, answers) {
   const rsvpUrl = `${BASE_URL}/rsvp/${eventGuest.rsvp_code}`;
@@ -277,7 +326,7 @@ function renderRsvpPage(event, guest, eventGuest, questions, answers) {
   }).join('');
 
   const statusBanner = eventGuest.status === 'accepted'
-    ? `<div class="status-banner accepted">✓ You have confirmed attendance</div>`
+    ? `<div class="status-banner accepted">✓ You have confirmed attendance${eventGuest.attendance_type==='online'?' (online)':''}</div>${eventGuest.attendance_type==='online'&&event.online_link?`<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px;margin-top:10px;font-size:14px"><strong style="color:#065f46">💻 Your joining link:</strong><br><a href="${esc(event.online_link)}" style="color:#7C3AED;word-break:break-all">${esc(event.online_link)}</a></div>`:''}`
     : eventGuest.status === 'declined'
     ? `<div class="status-banner declined">✗ You have declined this invitation</div>`
     : '';
@@ -394,6 +443,18 @@ body{background:#0f0720;font-family:Georgia,'Times New Roman',serif;min-height:1
       </div>
       <input type="hidden" id="si" name="status" value="${eventGuest.status||''}">
       <div class="form-fields${eventGuest.status==='accepted'?' vis':''}" id="ff">
+        ${event.allow_online ? `
+        <div class="fg" style="margin-bottom:18px">
+          <label>How will you attend?</label>
+          <div style="display:flex;gap:10px;margin-top:6px">
+            <label style="flex:1;display:flex;align-items:center;gap:8px;padding:12px 14px;border:2px solid ${eventGuest.attendance_type!=='online'?'#059669':'#ddd'};border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">
+              <input type="radio" name="attendance_type" value="in-person" ${eventGuest.attendance_type!=='online'?'checked':''} onchange="updateAttendanceType()"> 📍 In person
+            </label>
+            <label style="flex:1;display:flex;align-items:center;gap:8px;padding:12px 14px;border:2px solid ${eventGuest.attendance_type==='online'?'#7C3AED':'#ddd'};border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">
+              <input type="radio" name="attendance_type" value="online" ${eventGuest.attendance_type==='online'?'checked':''} onchange="updateAttendanceType()"> 💻 Online
+            </label>
+          </div>
+        </div>` : ''}
         ${event.allow_plus_one?`<div class="fg"><label>Plus one name (optional)</label><input type="text" name="plus_one_name" value="${esc(eventGuest.plus_one_name||'')}"></div>`:''}
         <div class="fg"><label>Dietary requirements (optional)</label><input type="text" name="dietary" value="${esc(eventGuest.dietary_requirements||'')}"></div>
         ${questionsHtml}
@@ -425,6 +486,12 @@ function pick(s){
   document.querySelector('.btn-yes').classList.toggle('on',s==='accepted');
   document.querySelector('.btn-no').classList.toggle('on',s==='declined');
   document.getElementById('ff').classList.toggle('vis',s==='accepted');
+}
+function updateAttendanceType(){
+  const radios=document.querySelectorAll('[name="attendance_type"]');
+  radios.forEach(r=>{
+    r.closest('label').style.borderColor=r.checked?(r.value==='online'?'#7C3AED':'#059669'):'#ddd';
+  });
 }
 async function doSubmit(e){
   e.preventDefault();
@@ -489,20 +556,21 @@ app.get('/api/events', requireAuth, async (req, res) => {
 app.post('/api/events', requireAuth, async (req, res) => {
   const { name, event_date, end_date, venue_name, venue_address, venue_lat, venue_lng,
     description, hero_image_url, dress_code, rsvp_deadline, max_guests, allow_plus_one,
-    check_in_pin, email_subject, email_from_name, email_reply_to, status } = req.body;
+    check_in_pin, email_subject, email_from_name, email_reply_to, status,
+    hashtags, allow_online, online_link } = req.body;
   if (!name || !event_date) return res.status(400).json({ error: 'Name and date required' });
   try {
     const slug = genSlug(name);
     const { rows } = await pool.query(`
       INSERT INTO events (slug,name,event_date,end_date,venue_name,venue_address,venue_lat,venue_lng,
         description,hero_image_url,dress_code,rsvp_deadline,max_guests,allow_plus_one,
-        check_in_pin,email_subject,email_from_name,email_reply_to,status)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING *`,
+        check_in_pin,email_subject,email_from_name,email_reply_to,status,hashtags,allow_online,online_link)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22) RETURNING *`,
       [slug,name,event_date,end_date||null,venue_name||null,venue_address||null,
        venue_lat||null,venue_lng||null,description||null,hero_image_url||null,
        dress_code||null,rsvp_deadline||null,max_guests||null,allow_plus_one||false,
        check_in_pin||null,email_subject||null,email_from_name||null,email_reply_to||null,
-       status||'draft']);
+       status||'draft',hashtags||null,allow_online||false,online_link||null]);
     res.json(rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -518,19 +586,21 @@ app.get('/api/events/:id', requireAuth, async (req, res) => {
 app.put('/api/events/:id', requireAuth, async (req, res) => {
   const { name, event_date, end_date, venue_name, venue_address, venue_lat, venue_lng,
     description, hero_image_url, dress_code, rsvp_deadline, max_guests, allow_plus_one,
-    check_in_pin, email_subject, email_from_name, email_reply_to, status } = req.body;
+    check_in_pin, email_subject, email_from_name, email_reply_to, status,
+    hashtags, allow_online, online_link } = req.body;
   try {
     const { rows } = await pool.query(`
       UPDATE events SET name=$1,event_date=$2,end_date=$3,venue_name=$4,venue_address=$5,
         venue_lat=$6,venue_lng=$7,description=$8,hero_image_url=$9,dress_code=$10,
         rsvp_deadline=$11,max_guests=$12,allow_plus_one=$13,check_in_pin=$14,
         email_subject=$15,email_from_name=$16,email_reply_to=$17,status=$18,
-        updated_at=NOW() WHERE id=$19 RETURNING *`,
+        hashtags=$19,allow_online=$20,online_link=$21,
+        updated_at=NOW() WHERE id=$22 RETURNING *`,
       [name,event_date,end_date||null,venue_name||null,venue_address||null,
        venue_lat||null,venue_lng||null,description||null,hero_image_url||null,
        dress_code||null,rsvp_deadline||null,max_guests||null,allow_plus_one||false,
        check_in_pin||null,email_subject||null,email_from_name||null,email_reply_to||null,
-       status||'draft',req.params.id]);
+       status||'draft',hashtags||null,allow_online||false,online_link||null,req.params.id]);
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
     res.json(rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -816,11 +886,13 @@ app.get('/rsvp/:code', async (req, res) => {
 });
 
 app.post('/rsvp/:code', async (req, res) => {
-  const { status, plus_one_name, dietary, answers } = req.body;
+  const { status, plus_one_name, dietary, answers, attendance_type } = req.body;
   if (!['accepted','declined'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
   try {
-    const { rows: eg } = await pool.query(
-      'SELECT * FROM event_guests WHERE rsvp_code=$1', [req.params.code.toUpperCase()]);
+    const { rows: eg } = await pool.query(`
+      SELECT eg.*, g.email, g.first_name, g.last_name
+      FROM event_guests eg JOIN guests g ON g.id=eg.guest_id
+      WHERE eg.rsvp_code=$1`, [req.params.code.toUpperCase()]);
     if (!eg.length) return res.status(404).json({ error: 'Invitation not found' });
     const eventGuest = eg[0];
 
@@ -830,10 +902,14 @@ app.post('/rsvp/:code', async (req, res) => {
       return res.status(400).json({ error: 'RSVP deadline has passed' });
     }
 
+    const resolvedAttendance = (status === 'accepted' && event.allow_online && attendance_type === 'online')
+      ? 'online' : 'in-person';
+
     await pool.query(`
-      UPDATE event_guests SET status=$1,plus_one_name=$2,dietary_requirements=$3,rsvp_submitted_at=NOW()
-      WHERE id=$4`,
-      [status, plus_one_name||null, dietary||null, eventGuest.id]);
+      UPDATE event_guests SET status=$1,plus_one_name=$2,dietary_requirements=$3,
+        attendance_type=$4,rsvp_submitted_at=NOW()
+      WHERE id=$5`,
+      [status, plus_one_name||null, dietary||null, resolvedAttendance, eventGuest.id]);
 
     // Save custom answers
     if (answers && typeof answers === 'object') {
@@ -843,6 +919,13 @@ app.post('/rsvp/:code', async (req, res) => {
           VALUES ($1,$2,$3) ON CONFLICT (event_guest_id,question_id) DO UPDATE SET answer=$3`,
           [eventGuest.id, parseInt(qid), answer]);
       }
+    }
+
+    // Send confirmation email for accepted RSVPs
+    if (status === 'accepted') {
+      const guest = { email: eventGuest.email, first_name: eventGuest.first_name, last_name: eventGuest.last_name };
+      const updatedEg = { ...eventGuest, attendance_type: resolvedAttendance, plus_one_name: plus_one_name||null };
+      sendRsvpConfirmation(event, guest, updatedEg).catch(e => console.error('Confirmation email failed:', e));
     }
 
     res.json({ ok: true });

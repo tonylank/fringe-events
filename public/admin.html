@@ -168,7 +168,7 @@ tr:hover td{background:#fafafa}
 .crop-footer small{font-size:12px;color:var(--muted)}
 .hero-input-wrap{display:flex;gap:8px;align-items:center}
 .hero-input-wrap input{flex:1}
-.hero-preview{width:100%;height:60px;object-fit:cover;border-radius:6px;border:1px solid var(--border);margin-top:6px;display:none}
+.hero-preview{width:100%;height:80px;object-fit:contain;border-radius:6px;border:1px solid var(--border);margin-top:6px;display:none;background:#f3f4f6}
 </style>
 </head>
 <body>
@@ -265,8 +265,19 @@ tr:hover td{background:#fafafa}
               <div class="fg"><label>Allow Plus One</label>
                 <select id="evPlusOne"><option value="false">No</option><option value="true">Yes</option></select></div>
               <div class="fg"><label>Check-in PIN</label><input id="evPin" type="text" placeholder="4-digit PIN for check-in app"></div>
+              <div class="fg span2"><label>Hashtags</label><input id="evHashtags" type="text" placeholder="#EdFringe #MyEvent"></div>
+              <div class="fg span2" style="background:#f5f3ff;border:1.5px solid #e0d9f5;border-radius:8px;padding:14px">
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:0">
+                  <input type="checkbox" id="evAllowOnline" onchange="toggleOnlineLink()"> Allow online attendance?
+                </label>
+                <div id="onlineLinkWrap" style="display:none;margin-top:12px">
+                  <label style="display:block;font-size:12px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Teams / Zoom Link</label>
+                  <input id="evOnlineLink" type="url" placeholder="https://teams.microsoft.com/l/meetup-join/…">
+                  <small style="font-size:11px;color:var(--muted);margin-top:4px;display:block">Guests who choose online attendance will receive this link in their confirmation email</small>
+                </div>
+              </div>
               <div class="fg"><label>Email From Name</label><input id="evFromName" type="text" placeholder="Your Event Team"></div>
-              <div class="fg"><label>Email Reply-to</label><input id="evReplyTo" type="email"></div>
+              <div class="fg"><label>Email Reply-to</label><input id="evReplyTo" type="email" placeholder="rsvp@edfringe.com"></div>
               <div class="fg span2"><label>Email Subject</label><input id="evSubject" type="text" placeholder="You're invited…"></div>
             </div>
           </div>
@@ -516,8 +527,12 @@ async function openEvent(id) {
   document.getElementById('evDesc').value = ev.description || '';
   document.getElementById('evPlusOne').value = ev.allow_plus_one ? 'true' : 'false';
   document.getElementById('evPin').value = ev.check_in_pin || '';
+  document.getElementById('evHashtags').value = ev.hashtags || '';
+  document.getElementById('evAllowOnline').checked = !!ev.allow_online;
+  document.getElementById('evOnlineLink').value = ev.online_link || '';
+  toggleOnlineLink();
   document.getElementById('evFromName').value = ev.email_from_name || '';
-  document.getElementById('evReplyTo').value = ev.email_reply_to || '';
+  document.getElementById('evReplyTo').value = ev.email_reply_to || 'rsvp@edfringe.com';
   document.getElementById('evSubject').value = ev.email_subject || '';
   loadEventStats();
 }
@@ -554,6 +569,9 @@ async function saveEventDetails() {
     description: document.getElementById('evDesc').value,
     allow_plus_one: document.getElementById('evPlusOne').value === 'true',
     check_in_pin: document.getElementById('evPin').value,
+    hashtags: document.getElementById('evHashtags').value,
+    allow_online: document.getElementById('evAllowOnline').checked,
+    online_link: document.getElementById('evOnlineLink').value || null,
     email_from_name: document.getElementById('evFromName').value,
     email_reply_to: document.getElementById('evReplyTo').value,
     email_subject: document.getElementById('evSubject').value,
@@ -982,6 +1000,11 @@ async function apiFetch(url, opts) {
     if (!r.ok) { toast(j.error || 'Error', 'err'); return null; }
     return j;
   } catch (e) { toast('Network error', 'err'); return null; }
+}
+
+function toggleOnlineLink() {
+  const on = document.getElementById('evAllowOnline').checked;
+  document.getElementById('onlineLinkWrap').style.display = on ? 'block' : 'none';
 }
 
 // ── Hero Image Upload & Crop ───────────────────────────────────────────────
