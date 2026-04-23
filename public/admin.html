@@ -523,6 +523,7 @@ tr:hover td{background:#fafafa}
 'use strict';
 
 let currentEventId = null;
+let currentEventSlug = null;
 let allEventGuests = [];
 let allMasterGuests = [];
 
@@ -629,6 +630,7 @@ async function openEvent(id) {
   document.querySelectorAll('.tab-pane').forEach((p,i) => p.classList.toggle('active', i===0));
   const ev = await apiFetch(`/api/events/${id}`);
   if (!ev) return;
+  currentEventSlug = ev.slug;
   document.getElementById('eventDetailName').textContent = ev.name;
   document.getElementById('eventDetailBadge').textContent = ev.status;
   document.getElementById('eventDetailBadge').className = `badge badge-${ev.status}`;
@@ -962,7 +964,7 @@ function exportGuestCSV() {
 // ── Questions ──────────────────────────────────────────────────────────────
 async function loadQuestions() {
   const qs = await apiFetch(`/api/events/${currentEventId}/questions`) || [];
-  document.getElementById('rsvpUrlExample').textContent = window.location.origin + '/rsvp/XXXXXXXX';
+  document.getElementById('rsvpUrlExample').textContent = window.location.origin + '/rsvp/[guest-code]  (check-in: /checkin/' + (currentEventSlug||'event-slug') + ')';
   const list = document.getElementById('questionsList');
   if (!qs.length) {
     list.innerHTML = '<div style="color:var(--muted);font-size:13px">No custom questions yet. Add questions to collect additional information from guests.</div>';
