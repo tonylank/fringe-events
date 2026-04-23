@@ -249,6 +249,7 @@ tr:hover td{background:#fafafa}
         <div class="tab" onclick="showTab('tabQuestions',this);loadQuestions()">RSVP Form</div>
         <div class="tab" onclick="showTab('tabMessages',this)">Messages</div>
         <div class="tab" data-for="tabAccessibility" onclick="showTab('tabAccessibility',this);loadAccessibilityNeeds()">Accessibility</div>
+        <div class="tab" data-for="tabDietary" onclick="showTab('tabDietary',this);loadDietaryRequirements()">Dietary</div>
       </div>
 
       <!-- Overview tab -->
@@ -365,6 +366,19 @@ tr:hover td{background:#fafafa}
             <span style="font-size:12px;color:var(--muted)">Guests who have provided specific accessibility needs</span>
           </div>
           <div class="card-body" id="accessibilityBody">
+            <p style="color:var(--muted);font-size:13px">Loading…</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dietary tab -->
+      <div class="tab-pane" id="tabDietary">
+        <div class="card">
+          <div class="card-head">
+            <h2>Dietary Requirements</h2>
+            <span style="font-size:12px;color:var(--muted)">Guests who have provided dietary information</span>
+          </div>
+          <div class="card-body" id="dietaryBody">
             <p style="color:var(--muted);font-size:13px">Loading…</p>
           </div>
         </div>
@@ -674,11 +688,42 @@ async function loadEventStats() {
     <div class="stat-label">Accessibility Needs</div>
     <div style="font-size:11px;color:#7C3AED;margin-top:4px;font-weight:600">View details →</div>
   </div>` : '';
+  const dietaryHtml = (stats.with_dietary > 0) ? `<div class="stat-card" style="cursor:pointer;border-color:#fcd34d" onclick="goToDietaryTab()">
+    <div class="stat-num" style="color:#D97706">${stats.with_dietary}</div>
+    <div class="stat-label">Dietary Requirements</div>
+    <div style="font-size:11px;color:#D97706;margin-top:4px;font-weight:600">View details →</div>
+  </div>` : '';
   document.getElementById('eventStats').innerHTML = acceptedHtml +
     cards.map(s => `<div class="stat-card">
       <div class="stat-num" style="${s.color?'color:'+s.color:''}">${s.num||0}</div>
       <div class="stat-label">${s.label}</div>
-    </div>`).join('') + accessHtml;
+    </div>`).join('') + accessHtml + dietaryHtml;
+}
+
+function goToDietaryTab() {
+  const el = document.querySelector('.tab[data-for="tabDietary"]');
+  showTab('tabDietary', el);
+  loadDietaryRequirements();
+}
+
+async function loadDietaryRequirements() {
+  const body = document.getElementById('dietaryBody');
+  body.innerHTML = '<p style="color:var(--muted);font-size:13px">Loading…</p>';
+  const rows = await apiFetch(`/api/events/${currentEventId}/dietary`);
+  if (!rows) return;
+  if (!rows.length) {
+    body.innerHTML = '<p style="color:var(--muted);font-size:13px">No guests have provided dietary requirements.</p>';
+    return;
+  }
+  body.innerHTML = `<div class="tbl-wrap"><table>
+    <thead><tr><th>Name</th><th>Email</th><th>Attendance</th><th>Dietary Requirements</th></tr></thead>
+    <tbody>${rows.map(r => `<tr>
+      <td><strong>${escH(r.first_name)} ${escH(r.last_name)}</strong></td>
+      <td style="color:var(--muted)">${escH(r.email)}</td>
+      <td>${r.attendance_type === 'online' ? '💻 Online' : '📍 In person'}</td>
+      <td>${escH(r.dietary_requirements)}</td>
+    </tr>`).join('')}</tbody>
+  </table></div>`;
 }
 
 function goToAccessibilityTab() {

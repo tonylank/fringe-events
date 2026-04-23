@@ -1189,9 +1189,26 @@ app.get('/api/events/:id/stats', requireAuth, async (req, res) => {
         COUNT(CASE WHEN checked_in_at IS NOT NULL THEN 1 END) AS checked_in,
         COUNT(CASE WHEN invitation_sent_at IS NOT NULL THEN 1 END) AS invited,
         COUNT(CASE WHEN reminder_sent_at IS NOT NULL THEN 1 END) AS reminded,
-        COUNT(CASE WHEN accessibility_needs IS NOT NULL AND accessibility_needs <> '' THEN 1 END) AS with_accessibility_needs
+        COUNT(CASE WHEN accessibility_needs IS NOT NULL AND accessibility_needs <> '' THEN 1 END) AS with_accessibility_needs,
+        COUNT(CASE WHEN dietary_requirements IS NOT NULL AND dietary_requirements <> '' THEN 1 END) AS with_dietary
       FROM event_guests WHERE event_id=$1`, [req.params.id]);
     res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Dietary Requirements ─────────────────────────────────────────────────────
+app.get('/api/events/:id/dietary', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT eg.id, eg.dietary_requirements, eg.status, eg.attendance_type,
+             g.first_name, g.last_name, g.email
+      FROM event_guests eg
+      JOIN guests g ON g.id = eg.guest_id
+      WHERE eg.event_id = $1
+        AND eg.dietary_requirements IS NOT NULL
+        AND eg.dietary_requirements <> ''
+      ORDER BY g.last_name, g.first_name`, [req.params.id]);
+    res.json(rows);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
