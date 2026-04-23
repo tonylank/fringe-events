@@ -875,7 +875,7 @@ function showModal(title, body, buttons) {
   document.getElementById('modalTitle').textContent = title;
   document.getElementById('modalBody').innerHTML = body;
   document.getElementById('modalFooter').innerHTML = (buttons||[]).map(b =>
-    `<button class="btn ${b.cls}" onclick="${b.fn}">${b.label}</button>`).join('');
+    `<button class="btn ${b.cls}" onclick="${b.fn.includes('(') ? b.fn : b.fn + '()'}">${b.label}</button>`).join('');
   document.getElementById('modalBackdrop').classList.add('show');
 }
 
