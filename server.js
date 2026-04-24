@@ -447,6 +447,8 @@ h1,h2,h3,.mini-card h2{font-family:'Playfair Display',Georgia,serif}
 .submit-btn:hover{background:#6D28D9}.submit-btn:disabled{background:#ccc;cursor:not-allowed}
 .success{display:none;background:#d1fae5;color:#065f46;padding:14px;border-radius:8px;text-align:center;font-size:15px;font-weight:700;margin-top:14px}
 .success.vis{display:block}
+.rsvp-err{display:none;background:#fef2f2;color:#991b1b;border:1px solid #fecaca;padding:13px 16px;border-radius:8px;font-size:14px;font-weight:500;margin-top:12px;text-align:center}
+.rsvp-err.vis{display:block}
 .cal-section{background:#fff;border-radius:12px;padding:24px 32px;box-shadow:0 4px 20px rgba(0,0,0,.08);margin-bottom:20px}
 .cal-section h3{font-size:15px;color:#2D1B69;margin-bottom:14px}
 .cal-btns{display:flex;gap:10px;flex-wrap:wrap}
@@ -591,6 +593,7 @@ h1,h2,h3,.mini-card h2{font-family:'Playfair Display',Georgia,serif}
         </div>
         ${questionsHtml}
       </div>
+      <div class="rsvp-err" id="rsvpErr">Please choose Attending or Decline before submitting.</div>
       <div class="success" id="ok">Thank you — your response has been saved ✓</div>
       <button class="submit-btn" id="sb">Save Response</button>
     </form>
@@ -614,14 +617,14 @@ let sel='${eventGuest.status||''}';
 setTimeout(()=>document.getElementById('env').classList.add('open'),700);
 setTimeout(()=>{document.getElementById('scene').style.display='none';document.getElementById('page').classList.add('vis');},2800);
 function pick(s){
-  sel=s;document.getElementById('si').value=s;
+  sel=s;document.getElementById('si').value=s;document.getElementById('rsvpErr').classList.remove('vis');
   document.querySelector('.btn-yes').classList.toggle('on',s==='accepted');
   document.querySelector('.btn-no').classList.toggle('on',s==='declined');
   document.getElementById('ff').classList.toggle('vis',s==='accepted');
 }
 async function doSubmit(e){
   e.preventDefault();
-  if(!sel){alert('Please select whether you are attending.');return;}
+  if(!sel){document.getElementById('rsvpErr').classList.add('vis');return;}
   const btn=document.getElementById('sb');
   btn.disabled=true;btn.textContent='Saving…';
   const data={status:sel,answers:{}};
