@@ -137,6 +137,9 @@ async function migrate() {
     await client.query(`ALTER TABLE event_guests ADD COLUMN IF NOT EXISTS attendance_type TEXT DEFAULT 'in-person'`);
     await client.query(`ALTER TABLE event_guests ADD COLUMN IF NOT EXISTS accessibility_needs TEXT`);
     await client.query(`ALTER TABLE event_guests ADD COLUMN IF NOT EXISTS plus_one_checked_in_at TIMESTAMPTZ`);
+    await client.query(`ALTER TABLE event_guests ADD COLUMN IF NOT EXISTS resend_email_id TEXT`);
+    await client.query(`ALTER TABLE event_guests ADD COLUMN IF NOT EXISTS email_status TEXT`);
+    await client.query(`ALTER TABLE event_guests ADD COLUMN IF NOT EXISTS email_status_at TIMESTAMPTZ`);
 
     // Seed default admin if none exists
     const { rows } = await client.query('SELECT COUNT(*) FROM admin_users');
@@ -169,7 +172,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '10mb', verify: (req, res, buf) => { req.rawBody = buf; } }));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -264,8 +267,31 @@ ${mapsUrl?`<br><a class="ml" href="${mapsUrl}" target="_blank">📍 View on Goog
 async function sendEmail({ to, toName, subject, html, text, attachments }) {
   if (!process.env.EMAIL_HOST) {
     console.log('[EMAIL SKIPPED - no EMAIL_HOST] To:', to, 'Subject:', subject);
-    return;
+    return null;
   }
+  // Resend HTTP API (enables delivery/open tracking via webhooks)
+  if (process.env.EMAIL_HOST === 'smtp.resend.com') {
+    const body = {
+      from: `${process.env.EMAIL_FROM_NAME || 'Fringe Events'} <${process.env.EMAIL_FROM}>`,
+      to: [`${toName} <${to}>`],
+      subject, html, text,
+    };
+    if (attachments?.length) {
+      body.attachments = attachments.map(a => ({
+        filename: a.filename,
+        content: Buffer.from(a.content).toString('base64'),
+      }));
+    }
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${process.env.EMAIL_PASS}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.message || 'Resend API error');
+    return j.id; // email ID for webhook tracking
+  }
+  // Fallback: SMTP via nodemailer
   const transporter = nodemailer.createTransport({
     host: process.env.EMAIL_HOST,
     port: parseInt(process.env.EMAIL_PORT || '587'),
@@ -277,6 +303,7 @@ async function sendEmail({ to, toName, subject, html, text, attachments }) {
     to: `"${toName}" <${to}>`,
     subject, html, text, attachments
   });
+  return null;
 }
 
 async function sendRsvpConfirmation(event, guest, eventGuest) {
@@ -994,7 +1021,7 @@ app.post('/api/events/:id/send-invitations', requireAuth, async (req, res) => {
       try {
         const html = buildInvitationHtml(event, eg, eg);
         const ics = generateICS(event, eg.email, `${eg.first_name} ${eg.last_name}`);
-        await sendEmail({
+        const emailId = await sendEmail({
           to: eg.email,
           toName: `${eg.first_name} ${eg.last_name}`,
           subject: event.email_subject || `You're invited: ${event.name}`,
@@ -1002,7 +1029,9 @@ app.post('/api/events/:id/send-invitations', requireAuth, async (req, res) => {
           text: `You are invited to ${event.name}. RSVP at: ${BASE_URL}/rsvp/${eg.rsvp_code}`,
           attachments: [{ filename: 'invite.ics', content: ics, contentType: 'text/calendar' }]
         });
-        await pool.query('UPDATE event_guests SET invitation_sent_at=NOW() WHERE id=$1', [eg.id]);
+        await pool.query(
+          'UPDATE event_guests SET invitation_sent_at=NOW(), resend_email_id=$1, email_status=$2, email_status_at=NOW() WHERE id=$3',
+          [emailId||null, emailId?'sent':null, eg.id]);
         sent++;
       } catch (e) { failed++; errors.push(`${eg.email}: ${e.message}`); }
     }
@@ -1024,14 +1053,16 @@ app.post('/api/events/:id/send-reminders', requireAuth, async (req, res) => {
     for (const eg of pending) {
       try {
         const html = buildInvitationHtml(event, eg, eg);
-        await sendEmail({
+        const emailId = await sendEmail({
           to: eg.email,
           toName: `${eg.first_name} ${eg.last_name}`,
           subject: `Reminder: ${event.email_subject || `You're invited to ${event.name}`}`,
           html,
           text: `Reminder: Please RSVP for ${event.name} at: ${BASE_URL}/rsvp/${eg.rsvp_code}`
         });
-        await pool.query('UPDATE event_guests SET reminder_sent_at=NOW() WHERE id=$1', [eg.id]);
+        await pool.query(
+          'UPDATE event_guests SET reminder_sent_at=NOW(), resend_email_id=$1, email_status=$2, email_status_at=NOW() WHERE id=$3',
+          [emailId||null, emailId?'sent':null, eg.id]);
         sent++;
       } catch { failed++; }
     }
@@ -1304,6 +1335,49 @@ app.get('/api/checkin-page-init', async (req, res) => {
     const ev = rows[0];
     if (!ev.check_in_pin || ev.check_in_pin !== pin) return res.status(401).json({ error: 'Incorrect PIN' });
     res.json({ eventId: ev.id, eventName: ev.name });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Resend Webhook ───────────────────────────────────────────────────────────
+const EMAIL_STATUS_PRIORITY = { sent:0, delayed:1, delivered:2, opened:3, clicked:4, complained:5, bounced:6 };
+
+function verifyResendWebhook(req) {
+  const secret = process.env.RESEND_WEBHOOK_SECRET;
+  if (!secret) return true; // skip if not configured
+  const msgId = req.headers['svix-id'];
+  const msgTs = req.headers['svix-timestamp'];
+  const msgSig = req.headers['svix-signature'];
+  if (!msgId || !msgTs || !msgSig) return false;
+  if (Math.abs(Date.now() / 1000 - parseInt(msgTs)) > 300) return false;
+  const signed = `${msgId}.${msgTs}.${req.rawBody || ''}`;
+  const key = Buffer.from(secret.replace(/^whsec_/, ''), 'base64');
+  const expected = crypto.createHmac('sha256', key).update(signed).digest('base64');
+  return msgSig.split(' ').some(s => s.replace('v1,', '') === expected);
+}
+
+app.post('/webhooks/resend', async (req, res) => {
+  if (!verifyResendWebhook(req)) return res.status(401).json({ error: 'Invalid signature' });
+  const { type, data } = req.body;
+  if (!type || !data?.email_id) return res.status(200).json({ ok: true });
+  const statusMap = {
+    'email.sent': 'sent', 'email.delivered': 'delivered', 'email.delivery_delayed': 'delayed',
+    'email.bounced': 'bounced', 'email.complained': 'complained',
+    'email.opened': 'opened', 'email.clicked': 'clicked',
+  };
+  const newStatus = statusMap[type];
+  if (!newStatus) return res.status(200).json({ ok: true });
+  const newPriority = EMAIL_STATUS_PRIORITY[newStatus] ?? -1;
+  try {
+    await pool.query(`
+      UPDATE event_guests SET email_status=$1, email_status_at=NOW()
+      WHERE resend_email_id=$2
+        AND (email_status IS NULL
+          OR COALESCE((CASE email_status
+            WHEN 'sent' THEN 0 WHEN 'delayed' THEN 1 WHEN 'delivered' THEN 2
+            WHEN 'opened' THEN 3 WHEN 'clicked' THEN 4 WHEN 'complained' THEN 5
+            WHEN 'bounced' THEN 6 ELSE -1 END), -1) < $3)`,
+      [newStatus, data.email_id, newPriority]);
+    res.status(200).json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
