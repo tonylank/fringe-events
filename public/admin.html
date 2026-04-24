@@ -334,6 +334,7 @@ tr:hover td{background:#fafafa}
           <input class="search-input" id="guestSearch" placeholder="Search guests…" oninput="filterGuestTable()">
           <button class="btn btn-warn btn-sm" onclick="sendInvitations()">📨 Send Invitations</button>
           <button class="btn btn-sec btn-sm" onclick="sendReminders()">🔔 Send Reminders</button>
+          <button class="btn btn-sec btn-sm" onclick="refreshEmailStatuses()" title="Poll Resend API for latest email open/click status">↻ Refresh Email Status</button>
           <button class="btn btn-sec btn-sm" onclick="exportGuestCSV()">↓ Export CSV</button>
         </div>
         <div class="card">
@@ -952,6 +953,17 @@ async function sendReminders() {
   if (!confirm('Send reminders to all pending guests?')) return;
   const r = await apiFetch(`/api/events/${currentEventId}/send-reminders`, { method:'POST', body:{} });
   if (r) toast(`Sent ${r.sent} reminders`, 'ok');
+}
+
+async function refreshEmailStatuses() {
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = '↻ Refreshing…';
+  const r = await apiFetch(`/api/events/${currentEventId}/refresh-email-statuses`, { method:'POST', body:{} });
+  btn.disabled = false; btn.textContent = '↻ Refresh Email Status';
+  if (r) {
+    toast(`Updated ${r.updated} of ${r.total} email statuses`, 'ok');
+    loadGuests();
+  }
 }
 
 function exportGuestCSV() {

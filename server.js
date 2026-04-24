@@ -316,7 +316,7 @@ async function sendRsvpConfirmation(event, guest, eventGuest) {
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
-<style>body{margin:0;background:#f4f4f8;font-family:'DM Sans',-apple-system,sans-serif}.w{max-width:600px;margin:40px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08)}.hero{width:100%;height:auto;display:block;background:#059669}.c{padding:36px}h1{margin:0 0 6px;font-size:24px;color:#059669;font-family:'Playfair Display',Georgia,serif}p{color:#444;line-height:1.7;font-size:15px}.meta{color:#666;font-size:14px;margin:16px 0}.highlight{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin:20px 0}.link-btn{display:inline-block;margin:8px 4px 0;padding:11px 22px;border-radius:6px;font-size:14px;font-weight:700;text-decoration:none}.cal-g{background:#4285f4;color:#fff}.cal-i{background:#2D1B69;color:#fff}.maps{background:#ea4335;color:#fff}.ft{padding:20px 36px;background:#f8f7ff;font-size:12px;color:#888;border-top:1px solid #eee}</style>
+<style>body{margin:0;background:#f4f4f8;font-family:'DM Sans',-apple-system,sans-serif}.w{max-width:600px;margin:40px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08)}.hero{width:100%;height:auto;display:block;background:#059669}.c{padding:36px}h1{margin:0 0 6px;font-size:24px;color:#059669;font-family:'Playfair Display',Georgia,serif}p{color:#444;line-height:1.7;font-size:15px}.meta{color:#666;font-size:14px;margin:16px 0}.highlight{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin:20px 0}.btns{margin-top:24px;display:flex;flex-wrap:wrap;gap:10px}.link-btn{display:inline-flex;align-items:center;gap:7px;padding:12px 20px;border-radius:8px;font-size:14px;font-weight:500;letter-spacing:.01em;text-decoration:none;border:1.5px solid #1e2b3c;color:#1e2b3c;background:#fff;transition:background .15s}.ft{padding:20px 36px;background:#f8f7ff;font-size:12px;color:#888;border-top:1px solid #eee}</style>
 </head><body><div class="w">
 ${event.hero_image_url?`<img class="hero" src="${BASE_URL.startsWith('http')?'':BASE_URL}${event.hero_image_url.startsWith('/')?(BASE_URL+event.hero_image_url):event.hero_image_url}" alt="">`:`<div class="hero"></div>`}
 <div class="c">
@@ -333,10 +333,12 @@ ${isOnline && event.online_link ? `
   <a href="${esc(event.online_link)}" style="color:#7C3AED;font-size:14px;word-break:break-all">${esc(event.online_link)}</a>
 </div>` : ''}
 ${eventGuest.plus_one_name ? `<p>We're also expecting <strong>${esc(eventGuest.plus_one_name)}</strong> as your guest.</p>` : ''}
-<p style="margin-top:20px">Add to your calendar:</p>
-<a class="link-btn cal-g" href="${gcal}" target="_blank">Google Calendar</a>
-<a class="link-btn cal-i" href="${calUrl}">Download .ics</a>
-${mapsUrl ? `<a class="link-btn maps" href="${mapsUrl}" target="_blank">Google Maps</a>` : ''}
+<p style="margin-top:20px;font-size:14px;color:#666">Add to your calendar:</p>
+<div class="btns">
+<a class="link-btn" href="${gcal}" target="_blank"><span style="font-size:16px">📅</span> Google Calendar</a>
+<a class="link-btn" href="${calUrl}"><span style="font-size:16px">📎</span> Download .ics</a>
+${mapsUrl ? `<a class="link-btn" href="${mapsUrl}" target="_blank"><span style="font-size:16px">📍</span> Google Maps</a>` : ''}
+</div>
 </div>
 <div class="ft">You received this because you RSVPd for ${esc(event.name)}. Need to change your response? Visit your <a href="${BASE_URL}/rsvp/${eventGuest.rsvp_code}" style="color:#7C3AED">RSVP page</a>.</div>
 </div></body></html>`;
@@ -1356,8 +1358,12 @@ function verifyResendWebhook(req) {
 }
 
 app.post('/webhooks/resend', async (req, res) => {
-  if (!verifyResendWebhook(req)) return res.status(401).json({ error: 'Invalid signature' });
+  if (!verifyResendWebhook(req)) {
+    console.log('[WEBHOOK] Resend signature verification failed');
+    return res.status(401).json({ error: 'Invalid signature' });
+  }
   const { type, data } = req.body;
+  console.log('[WEBHOOK] Resend event:', type, 'email_id:', data?.email_id);
   if (!type || !data?.email_id) return res.status(200).json({ ok: true });
   const statusMap = {
     'email.sent': 'sent', 'email.delivered': 'delivered', 'email.delivery_delayed': 'delayed',
@@ -1368,7 +1374,7 @@ app.post('/webhooks/resend', async (req, res) => {
   if (!newStatus) return res.status(200).json({ ok: true });
   const newPriority = EMAIL_STATUS_PRIORITY[newStatus] ?? -1;
   try {
-    await pool.query(`
+    const result = await pool.query(`
       UPDATE event_guests SET email_status=$1, email_status_at=NOW()
       WHERE resend_email_id=$2
         AND (email_status IS NULL
@@ -1377,8 +1383,58 @@ app.post('/webhooks/resend', async (req, res) => {
             WHEN 'opened' THEN 3 WHEN 'clicked' THEN 4 WHEN 'complained' THEN 5
             WHEN 'bounced' THEN 6 ELSE -1 END), -1) < $3)`,
       [newStatus, data.email_id, newPriority]);
+    console.log('[WEBHOOK] Updated', result.rowCount, 'guest(s) to status:', newStatus);
     res.status(200).json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('[WEBHOOK] Error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Manual refresh: poll Resend API for current status of all sent emails in an event
+app.post('/api/events/:id/refresh-email-statuses', requireAuth, async (req, res) => {
+  if (!process.env.EMAIL_PASS || process.env.EMAIL_HOST !== 'smtp.resend.com') {
+    return res.status(400).json({ error: 'Resend not configured' });
+  }
+  const { rows } = await pool.query(
+    `SELECT id, resend_email_id FROM event_guests WHERE event_id=$1 AND resend_email_id IS NOT NULL`,
+    [req.params.id]
+  );
+  if (!rows.length) return res.json({ updated: 0 });
+
+  const resendStatusMap = {
+    sent: 'sent', delivered: 'delivered', delivery_delayed: 'delayed',
+    bounced: 'bounced', complained: 'complained', opened: 'opened', clicked: 'clicked',
+  };
+
+  let updated = 0;
+  for (const eg of rows) {
+    try {
+      const r = await fetch(`https://api.resend.com/emails/${eg.resend_email_id}`, {
+        headers: { 'Authorization': `Bearer ${process.env.EMAIL_PASS}` },
+      });
+      if (!r.ok) continue;
+      const j = await r.json();
+      // last_event is the most recent event type e.g. "opened"
+      const rawStatus = j.last_event;
+      const newStatus = resendStatusMap[rawStatus];
+      if (!newStatus) continue;
+      const newPriority = EMAIL_STATUS_PRIORITY[newStatus] ?? -1;
+      const upd = await pool.query(`
+        UPDATE event_guests SET email_status=$1, email_status_at=NOW()
+        WHERE id=$2
+          AND (email_status IS NULL
+            OR COALESCE((CASE email_status
+              WHEN 'sent' THEN 0 WHEN 'delayed' THEN 1 WHEN 'delivered' THEN 2
+              WHEN 'opened' THEN 3 WHEN 'clicked' THEN 4 WHEN 'complained' THEN 5
+              WHEN 'bounced' THEN 6 ELSE -1 END), -1) < $3)`,
+        [newStatus, eg.id, newPriority]);
+      if (upd.rowCount) updated++;
+    } catch (e) {
+      console.error('[REFRESH] Error fetching', eg.resend_email_id, e.message);
+    }
+  }
+  res.json({ updated, total: rows.length });
 });
 
 // ─── Admin pages ──────────────────────────────────────────────────────────────
