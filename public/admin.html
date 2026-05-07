@@ -428,9 +428,14 @@ tr:hover td{background:#fafafa}
       <div id="exportPanel" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin-bottom:16px">
         <div style="font-weight:600;font-size:14px;margin-bottom:14px;color:var(--txt)">Export guest list as CSV</div>
         <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end">
-          <div style="flex:1;min-width:160px">
+          <div style="flex:1;min-width:180px;position:relative">
             <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Filter by tag</label>
-            <input id="exportTagFilter" type="text" class="search-input" style="width:100%;margin:0" placeholder="e.g. vip, press…">
+            <button type="button" id="tagDropBtn" onclick="toggleTagDrop()" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:7px;font-size:14px;background:var(--bg);color:var(--txt);text-align:left;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+              <span id="tagDropLabel">All tags</span><span style="opacity:.5;font-size:11px">▾</span>
+            </button>
+            <div id="tagDropPanel" style="display:none;position:absolute;top:calc(100% + 4px);left:0;min-width:200px;max-height:240px;overflow-y:auto;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:200;padding:6px 0">
+              <div id="tagCheckList"></div>
+            </div>
           </div>
           <div style="flex:2;min-width:200px">
             <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Filter by event</label>
@@ -1119,13 +1124,45 @@ async function loadMasterGuests() {
 
 function toggleExportPanel() {
   const p = document.getElementById('exportPanel');
-  p.style.display = p.style.display === 'none' ? 'block' : 'none';
+  const opening = p.style.display === 'none';
+  p.style.display = opening ? 'block' : 'none';
+  if (opening) loadExportTags();
 }
 
 function toggleEventFilterRow() {
   const hasEvent = !!document.getElementById('exportEventFilter').value;
   document.getElementById('exportEventFilterRow').style.display = hasEvent ? 'block' : 'none';
 }
+
+async function loadExportTags() {
+  const tags = await apiFetch('/api/guests/tags') || [];
+  const list = document.getElementById('tagCheckList');
+  if (!tags.length) { list.innerHTML = '<div style="padding:10px 14px;font-size:13px;color:var(--muted)">No tags found</div>'; return; }
+  list.innerHTML = tags.map(t => `
+    <label style="display:flex;align-items:center;gap:8px;padding:7px 14px;cursor:pointer;font-size:14px;color:var(--txt)" onmouseenter="this.style.background='var(--hover,#f3f4f6)'" onmouseleave="this.style.background=''">
+      <input type="checkbox" value="${escH(t)}" onchange="updateTagDropLabel()" style="accent-color:var(--acc);width:15px;height:15px;cursor:pointer">
+      ${escH(t)}
+    </label>`).join('');
+}
+
+function toggleTagDrop() {
+  const panel = document.getElementById('tagDropPanel');
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+function updateTagDropLabel() {
+  const checked = [...document.querySelectorAll('#tagCheckList input:checked')].map(i => i.value);
+  document.getElementById('tagDropLabel').textContent = checked.length ? checked.join(', ') : 'All tags';
+}
+
+// Close tag dropdown when clicking outside
+document.addEventListener('click', e => {
+  if (!document.getElementById('tagDropBtn')?.contains(e.target) &&
+      !document.getElementById('tagDropPanel')?.contains(e.target)) {
+    const panel = document.getElementById('tagDropPanel');
+    if (panel) panel.style.display = 'none';
+  }
+});
 
 async function populateExportEventFilter() {
   const sel = document.getElementById('exportEventFilter');
@@ -1136,11 +1173,11 @@ async function populateExportEventFilter() {
 }
 
 async function doExportMasterCSV() {
-  const tag = document.getElementById('exportTagFilter').value.trim();
+  const selectedTags = [...document.querySelectorAll('#tagCheckList input:checked')].map(i => i.value);
   const eventId = document.getElementById('exportEventFilter').value;
   const eventStatus = document.getElementById('exportEventStatus').value;
   const params = new URLSearchParams();
-  if (tag) params.set('tag', tag);
+  if (selectedTags.length) params.set('tag', selectedTags.join(','));
   if (eventId) { params.set('event_id', eventId); params.set('event_filter', eventStatus); }
   const url = '/api/guests' + (params.toString() ? '?' + params.toString() : '');
   const guests = await apiFetch(url) || [];
@@ -1155,7 +1192,8 @@ async function doExportMasterCSV() {
   const eventSel = document.getElementById('exportEventFilter');
   const eventName = eventId ? eventSel.selectedOptions[0]?.text.replace(/[^a-z0-9]/gi,'-').toLowerCase() : 'all';
   const statusLabel = eventId ? `-${eventStatus}` : '';
-  a.download = `guests-${tag ? tag+'-' : ''}${eventName}${statusLabel}-${new Date().toISOString().slice(0,10)}.csv`;
+  const tagLabel = selectedTags.length ? selectedTags.join('-')+'-' : '';
+  a.download = `guests-${tagLabel}${eventName}${statusLabel}-${new Date().toISOString().slice(0,10)}.csv`;
   a.click();
   toast(`Exported ${guests.length} guests`, 'ok');
 }

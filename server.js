@@ -830,8 +830,14 @@ app.get('/api/guests', requireAuth, async (req, res) => {
       conditions.push(`(g.first_name ILIKE $${params.length} OR g.last_name ILIKE $${params.length} OR g.email ILIKE $${params.length} OR g.company ILIKE $${params.length})`);
     }
     if (tag) {
-      params.push(`%${tag}%`);
-      conditions.push(`g.tags ILIKE $${params.length}`);
+      const tagList = tag.split(',').map(t => t.trim()).filter(Boolean);
+      if (tagList.length === 1) {
+        params.push(`%${tagList[0]}%`);
+        conditions.push(`g.tags ILIKE $${params.length}`);
+      } else if (tagList.length > 1) {
+        const tagClauses = tagList.map(t => { params.push(`%${t}%`); return `g.tags ILIKE $${params.length}`; });
+        conditions.push('(' + tagClauses.join(' OR ') + ')');
+      }
     }
 
     let query;
@@ -891,6 +897,15 @@ app.delete('/api/guests/:id', requireAuth, async (req, res) => {
 });
 
 // Guest event history
+app.get('/api/guests/tags', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT tags FROM guests WHERE tags IS NOT NULL AND tags <> ''`);
+    const tagSet = new Set();
+    rows.forEach(r => r.tags.split(',').forEach(t => { const s = t.trim(); if (s) tagSet.add(s); }));
+    res.json([...tagSet].sort((a, b) => a.localeCompare(b)));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/guests/:id/events', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`
