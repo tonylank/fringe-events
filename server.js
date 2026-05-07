@@ -820,7 +820,7 @@ app.get('/api/venues/:id/history', requireAuth, async (req, res) => {
 
 // ─── Guest Routes (master database) ──────────────────────────────────────────
 app.get('/api/guests', requireAuth, async (req, res) => {
-  const { q, tag, event_id } = req.query;
+  const { q, tag, event_id, event_filter } = req.query;
   try {
     const params = [];
     const conditions = [];
@@ -837,7 +837,14 @@ app.get('/api/guests', requireAuth, async (req, res) => {
     let query;
     if (event_id) {
       params.push(parseInt(event_id));
-      query = `SELECT DISTINCT g.* FROM guests g JOIN event_guests eg ON eg.guest_id=g.id WHERE eg.event_id=$${params.length}`;
+      const evParam = `$${params.length}`;
+      // event_filter: 'invited' (default) | 'accepted' | 'attended'
+      const egCondition = event_filter === 'accepted'
+        ? `eg.event_id=${evParam} AND eg.status='accepted'`
+        : event_filter === 'attended'
+        ? `eg.event_id=${evParam} AND eg.checked_in_at IS NOT NULL`
+        : `eg.event_id=${evParam}`;
+      query = `SELECT DISTINCT g.* FROM guests g JOIN event_guests eg ON eg.guest_id=g.id WHERE ${egCondition}`;
       if (conditions.length) query += ' AND ' + conditions.join(' AND ');
     } else {
       query = `SELECT g.* FROM guests g`;

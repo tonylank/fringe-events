@@ -434,8 +434,16 @@ tr:hover td{background:#fafafa}
           </div>
           <div style="flex:2;min-width:200px">
             <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Filter by event</label>
-            <select id="exportEventFilter" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:7px;font-size:14px;background:var(--bg);color:var(--txt)">
+            <select id="exportEventFilter" onchange="toggleEventFilterRow()" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:7px;font-size:14px;background:var(--bg);color:var(--txt)">
               <option value="">All guests (no event filter)</option>
+            </select>
+          </div>
+          <div id="exportEventFilterRow" style="flex:2;min-width:200px;display:none">
+            <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Who to include</label>
+            <select id="exportEventStatus" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:7px;font-size:14px;background:var(--bg);color:var(--txt)">
+              <option value="invited">Everyone invited</option>
+              <option value="accepted">RSVPd yes only</option>
+              <option value="attended">Attended (checked in)</option>
             </select>
           </div>
           <button class="btn btn-pri" onclick="doExportMasterCSV()">↓ Download CSV</button>
@@ -1114,6 +1122,11 @@ function toggleExportPanel() {
   p.style.display = p.style.display === 'none' ? 'block' : 'none';
 }
 
+function toggleEventFilterRow() {
+  const hasEvent = !!document.getElementById('exportEventFilter').value;
+  document.getElementById('exportEventFilterRow').style.display = hasEvent ? 'block' : 'none';
+}
+
 async function populateExportEventFilter() {
   const sel = document.getElementById('exportEventFilter');
   if (!sel) return;
@@ -1125,9 +1138,10 @@ async function populateExportEventFilter() {
 async function doExportMasterCSV() {
   const tag = document.getElementById('exportTagFilter').value.trim();
   const eventId = document.getElementById('exportEventFilter').value;
+  const eventStatus = document.getElementById('exportEventStatus').value;
   const params = new URLSearchParams();
   if (tag) params.set('tag', tag);
-  if (eventId) params.set('event_id', eventId);
+  if (eventId) { params.set('event_id', eventId); params.set('event_filter', eventStatus); }
   const url = '/api/guests' + (params.toString() ? '?' + params.toString() : '');
   const guests = await apiFetch(url) || [];
   if (!guests.length) { toast('No guests match those filters', 'err'); return; }
@@ -1138,8 +1152,10 @@ async function doExportMasterCSV() {
   const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'}));
-  const eventName = document.getElementById('exportEventFilter').selectedOptions[0]?.text.replace(/[^a-z0-9]/gi,'-').toLowerCase() || 'all';
-  a.download = `guests-${tag||eventName}-${new Date().toISOString().slice(0,10)}.csv`;
+  const eventSel = document.getElementById('exportEventFilter');
+  const eventName = eventId ? eventSel.selectedOptions[0]?.text.replace(/[^a-z0-9]/gi,'-').toLowerCase() : 'all';
+  const statusLabel = eventId ? `-${eventStatus}` : '';
+  a.download = `guests-${tag ? tag+'-' : ''}${eventName}${statusLabel}-${new Date().toISOString().slice(0,10)}.csv`;
   a.click();
   toast(`Exported ${guests.length} guests`, 'ok');
 }
