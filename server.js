@@ -820,15 +820,31 @@ app.get('/api/venues/:id/history', requireAuth, async (req, res) => {
 
 // ─── Guest Routes (master database) ──────────────────────────────────────────
 app.get('/api/guests', requireAuth, async (req, res) => {
-  const { q } = req.query;
+  const { q, tag, event_id } = req.query;
   try {
-    let query = 'SELECT * FROM guests';
     const params = [];
+    const conditions = [];
+
     if (q) {
-      query += ` WHERE (first_name ILIKE $1 OR last_name ILIKE $1 OR email ILIKE $1 OR company ILIKE $1)`;
       params.push(`%${q}%`);
+      conditions.push(`(g.first_name ILIKE $${params.length} OR g.last_name ILIKE $${params.length} OR g.email ILIKE $${params.length} OR g.company ILIKE $${params.length})`);
     }
-    query += ' ORDER BY last_name, first_name';
+    if (tag) {
+      params.push(`%${tag}%`);
+      conditions.push(`g.tags ILIKE $${params.length}`);
+    }
+
+    let query;
+    if (event_id) {
+      params.push(parseInt(event_id));
+      query = `SELECT DISTINCT g.* FROM guests g JOIN event_guests eg ON eg.guest_id=g.id WHERE eg.event_id=$${params.length}`;
+      if (conditions.length) query += ' AND ' + conditions.join(' AND ');
+    } else {
+      query = `SELECT g.* FROM guests g`;
+      if (conditions.length) query += ' WHERE ' + conditions.join(' AND ');
+    }
+    query += ' ORDER BY g.last_name, g.first_name';
+
     const { rows } = await pool.query(query, params);
     res.json(rows);
   } catch (e) { res.status(500).json({ error: e.message }); }

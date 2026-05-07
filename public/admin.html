@@ -420,9 +420,28 @@ tr:hover td{background:#fafafa}
       <div class="page-head">
         <h1>Guest Database</h1>
         <div class="page-head-right">
+          <button class="btn btn-sec" onclick="toggleExportPanel()">↓ Export CSV</button>
           <button class="btn btn-sec" onclick="openImportGuests()">↑ Import CSV</button>
           <button class="btn btn-pri" onclick="openNewGuest()">+ Add Guest</button>
         </div>
+      </div>
+      <div id="exportPanel" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin-bottom:16px">
+        <div style="font-weight:600;font-size:14px;margin-bottom:14px;color:var(--txt)">Export guest list as CSV</div>
+        <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end">
+          <div style="flex:1;min-width:160px">
+            <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Filter by tag</label>
+            <input id="exportTagFilter" type="text" class="search-input" style="width:100%;margin:0" placeholder="e.g. vip, press…">
+          </div>
+          <div style="flex:2;min-width:200px">
+            <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Filter by event</label>
+            <select id="exportEventFilter" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:7px;font-size:14px;background:var(--bg);color:var(--txt)">
+              <option value="">All guests (no event filter)</option>
+            </select>
+          </div>
+          <button class="btn btn-pri" onclick="doExportMasterCSV()">↓ Download CSV</button>
+          <button class="btn btn-sec" onclick="toggleExportPanel()">Cancel</button>
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-top:10px">Filters are combined — leave blank to export all guests.</div>
       </div>
       <div class="search-row">
         <input class="search-input" id="masterSearch" placeholder="Search by name, email or company…" oninput="loadMasterGuests()">
@@ -580,7 +599,7 @@ function showView(name) {
   const tabs = { events: 0, guests: 1, venues: 2, venue: 2 };
   const idx = tabs[name];
   if (idx !== undefined) document.querySelectorAll('.nav-tab')[idx]?.classList.add('active');
-  if (name === 'guests') loadMasterGuests();
+  if (name === 'guests') { loadMasterGuests(); populateExportEventFilter(); }
   if (name === 'venues') loadVenues();
 }
 
@@ -1088,6 +1107,41 @@ async function loadMasterGuests() {
         <button class="btn btn-err btn-sm" onclick="deleteMasterGuest(${g.id})">Delete</button>
       </td>
     </tr>`).join('');
+}
+
+function toggleExportPanel() {
+  const p = document.getElementById('exportPanel');
+  p.style.display = p.style.display === 'none' ? 'block' : 'none';
+}
+
+async function populateExportEventFilter() {
+  const sel = document.getElementById('exportEventFilter');
+  if (!sel) return;
+  const events = await apiFetch('/api/events') || [];
+  sel.innerHTML = '<option value="">All guests (no event filter)</option>' +
+    events.map(e => `<option value="${e.id}">${escH(e.name)}</option>`).join('');
+}
+
+async function doExportMasterCSV() {
+  const tag = document.getElementById('exportTagFilter').value.trim();
+  const eventId = document.getElementById('exportEventFilter').value;
+  const params = new URLSearchParams();
+  if (tag) params.set('tag', tag);
+  if (eventId) params.set('event_id', eventId);
+  const url = '/api/guests' + (params.toString() ? '?' + params.toString() : '');
+  const guests = await apiFetch(url) || [];
+  if (!guests.length) { toast('No guests match those filters', 'err'); return; }
+  const headers = ['First Name','Last Name','Email','Phone','Company','Tags'];
+  const rows = guests.map(g => [
+    g.first_name, g.last_name, g.email, g.phone||'', g.company||'', g.tags||''
+  ].map(v => `"${String(v).replace(/"/g,'""')}"`));
+  const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'}));
+  const eventName = document.getElementById('exportEventFilter').selectedOptions[0]?.text.replace(/[^a-z0-9]/gi,'-').toLowerCase() || 'all';
+  a.download = `guests-${tag||eventName}-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  toast(`Exported ${guests.length} guests`, 'ok');
 }
 
 async function openGuestHistory(guestId, guestName) {
