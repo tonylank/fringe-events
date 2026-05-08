@@ -959,7 +959,21 @@ app.get('/api/events/:id/guests', requireAuth, async (req, res) => {
 
 // Add single guest to event (by guest_id)
 app.post('/api/events/:id/guests', requireAuth, async (req, res) => {
-  const { guest_id } = req.body;
+  const { guest_id, guest_ids } = req.body;
+  // Bulk add
+  if (Array.isArray(guest_ids) && guest_ids.length) {
+    try {
+      let added = 0;
+      for (const gid of guest_ids) {
+        const { rowCount } = await pool.query(
+          `INSERT INTO event_guests (event_id,guest_id,rsvp_code) VALUES ($1,$2,$3) ON CONFLICT (event_id,guest_id) DO NOTHING`,
+          [req.params.id, gid, genCode()]);
+        if (rowCount) added++;
+      }
+      return res.json({ added, skipped: guest_ids.length - added });
+    } catch (e) { return res.status(500).json({ error: e.message }); }
+  }
+  // Single add
   if (!guest_id) return res.status(400).json({ error: 'guest_id required' });
   try {
     const code = genCode();

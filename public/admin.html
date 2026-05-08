@@ -327,7 +327,8 @@ tr:hover td{background:#fafafa}
           <div></div>
           <div class="page-head-right">
             <button class="btn btn-sec btn-sm" onclick="openCopyGuests()">Copy from event…</button>
-            <button class="btn btn-pri btn-sm" onclick="openAddGuest()">+ Add Guest</button>
+            <button class="btn btn-sec btn-sm" onclick="openAddGuest()">Quick Add Guest</button>
+            <button class="btn btn-pri btn-sm" onclick="openBuildGuestlist()">Build Guestlist</button>
           </div>
         </div>
         <div class="search-row">
@@ -969,6 +970,121 @@ async function doCopyGuests() {
   const r = await apiFetch(`/api/events/${currentEventId}/copy-guests-from/${sourceId}`, { method:'POST', body:{} });
   if (r) { closeModal(); toast(`Added ${r.added} guests, skipped ${r.skipped}`,'ok'); loadEventGuests(); loadEventStats(); }
 }
+
+let builderGuests = [];
+async function openBuildGuestlist() {
+  const [tags, events] = await Promise.all([
+    apiFetch('/api/guests/tags') || [],
+    apiFetch('/api/events') || []
+  ]);
+  const otherEvents = (events||[]).filter(e => e.id !== currentEventId);
+  showModal('Build Guestlist', `
+    <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:16px;align-items:flex-end">
+      <div style="flex:1;min-width:160px;position:relative">
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Filter by tag</label>
+        <button type="button" id="bldrTagBtn" onclick="toggleBldrTagDrop()" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:7px;font-size:13px;background:var(--bg);color:var(--txt);text-align:left;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+          <span id="bldrTagLabel">All tags</span><span style="opacity:.5;font-size:11px">▾</span>
+        </button>
+        <div id="bldrTagPanel" style="display:none;position:absolute;top:calc(100% + 4px);left:0;min-width:200px;max-height:200px;overflow-y:auto;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:300;padding:6px 0">
+          ${(tags||[]).length ? (tags||[]).map(t => `
+            <label style="display:flex;align-items:center;gap:8px;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--txt)" onmouseenter="this.style.background='var(--hover,#f3f4f6)'" onmouseleave="this.style.background=''">
+              <input type="checkbox" value="${escH(t)}" onchange="updateBldrTagLabel();filterBuilderGuests()" style="accent-color:var(--acc);width:14px;height:14px;cursor:pointer"> ${escH(t)}
+            </label>`).join('') : '<div style="padding:10px 14px;font-size:13px;color:var(--muted)">No tags</div>'}
+        </div>
+      </div>
+      <div style="flex:1;min-width:180px">
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">From event</label>
+        <select id="bldrEventFilter" onchange="toggleBldrEventStatus();filterBuilderGuests()" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:7px;font-size:13px;background:var(--bg);color:var(--txt)">
+          <option value="">All guests</option>
+          ${otherEvents.map(e=>`<option value="${e.id}">${escH(e.name)}</option>`).join('')}
+        </select>
+      </div>
+      <div id="bldrEventStatusWrap" style="flex:1;min-width:160px;display:none">
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Who</label>
+        <select id="bldrEventStatus" onchange="filterBuilderGuests()" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:7px;font-size:13px;background:var(--bg);color:var(--txt)">
+          <option value="invited">Everyone invited</option>
+          <option value="accepted">RSVPd yes</option>
+          <option value="attended">Attended</option>
+        </select>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);margin-bottom:8px">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;cursor:pointer;color:var(--txt)">
+        <input type="checkbox" id="bldrSelectAll" onchange="bldrToggleAll()" style="accent-color:var(--acc);width:15px;height:15px;cursor:pointer"> Select all
+      </label>
+      <span id="bldrCount" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+    <div id="bldrList" style="max-height:340px;overflow-y:auto"></div>
+    <div style="font-size:12px;color:var(--muted);margin-top:12px">Guests already in this event are marked and excluded from selection.</div>`,
+    [{label:'Cancel',fn:'closeModal',cls:'btn-sec'},{label:'Add Selected',fn:'doAddBuilderGuests()',cls:'btn-pri'}]);
+  filterBuilderGuests();
+}
+
+function toggleBldrTagDrop() {
+  const p = document.getElementById('bldrTagPanel');
+  p.style.display = p.style.display === 'none' ? 'block' : 'none';
+}
+function updateBldrTagLabel() {
+  const checked = [...document.querySelectorAll('#bldrTagPanel input:checked')].map(i => i.value);
+  document.getElementById('bldrTagLabel').textContent = checked.length ? checked.join(', ') : 'All tags';
+}
+function toggleBldrEventStatus() {
+  document.getElementById('bldrEventStatusWrap').style.display =
+    document.getElementById('bldrEventFilter').value ? 'block' : 'none';
+}
+
+async function filterBuilderGuests() {
+  const tags = [...document.querySelectorAll('#bldrTagPanel input:checked')].map(i => i.value);
+  const eventId = document.getElementById('bldrEventFilter').value;
+  const eventStatus = document.getElementById('bldrEventStatus').value;
+  const params = new URLSearchParams();
+  if (tags.length) params.set('tag', tags.join(','));
+  if (eventId) { params.set('event_id', eventId); params.set('event_filter', eventStatus); }
+  const url = '/api/guests' + (params.toString() ? '?' + params.toString() : '');
+  builderGuests = await apiFetch(url) || [];
+  const inEvent = new Set(allEventGuests.map(eg => eg.guest_id));
+  const list = document.getElementById('bldrList');
+  list.innerHTML = builderGuests.map(g => `
+    <label style="display:flex;align-items:center;gap:10px;padding:9px 6px;border-bottom:1px solid var(--border);cursor:${inEvent.has(g.id)?'default':'pointer'};opacity:${inEvent.has(g.id)?'0.45':'1'};font-size:14px;color:var(--txt)">
+      <input type="checkbox" name="bldrG" value="${g.id}" ${inEvent.has(g.id)?'disabled checked':''} style="accent-color:var(--acc);width:15px;height:15px;cursor:pointer" onchange="updateBldrCount()">
+      <strong>${escH(g.first_name)} ${escH(g.last_name)}</strong>
+      <span style="color:var(--muted);font-size:12px">${escH(g.email)}</span>
+      ${g.tags?'<span style="margin-left:auto;font-size:11px;color:var(--muted)">'+escH(g.tags)+'</span>':''}
+      ${inEvent.has(g.id)?'<span style="margin-left:auto;font-size:11px;color:var(--ok)">✓ Added</span>':''}
+    </label>`).join('') || '<div style="padding:20px;color:var(--muted);font-size:13px">No guests match these filters</div>';
+  document.getElementById('bldrSelectAll').checked = false;
+  updateBldrCount();
+}
+
+function bldrToggleAll() {
+  const on = document.getElementById('bldrSelectAll').checked;
+  document.querySelectorAll('#bldrList input[name=bldrG]:not(:disabled)').forEach(cb => cb.checked = on);
+  updateBldrCount();
+}
+
+function updateBldrCount() {
+  const checked = document.querySelectorAll('#bldrList input[name=bldrG]:checked:not(:disabled)').length;
+  document.getElementById('bldrCount').textContent = checked ? `${checked} selected` : '';
+}
+
+async function doAddBuilderGuests() {
+  const ids = [...document.querySelectorAll('#bldrList input[name=bldrG]:checked:not(:disabled)')].map(cb => parseInt(cb.value));
+  if (!ids.length) { toast('No guests selected', 'err'); return; }
+  const r = await apiFetch(`/api/events/${currentEventId}/guests`, { method:'POST', body: { guest_ids: ids }});
+  if (r) {
+    closeModal();
+    toast(`Added ${r.added} guest(s)${r.skipped ? ', '+r.skipped+' already in event' : ''}`, 'ok');
+    loadEventGuests();
+    loadEventStats();
+  }
+}
+
+// Close builder tag dropdown on outside click
+document.addEventListener('click', e => {
+  const btn = document.getElementById('bldrTagBtn');
+  const panel = document.getElementById('bldrTagPanel');
+  if (btn && panel && !btn.contains(e.target) && !panel.contains(e.target)) panel.style.display = 'none';
+});
 
 async function sendInvitations() {
   const selected = getSelectedGuestIds();
