@@ -906,6 +906,78 @@ app.get('/api/guests/tags', requireAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Tag with usage counts
+app.get('/api/tags', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT tags FROM guests WHERE tags IS NOT NULL AND tags <> ''`);
+    const counts = {};
+    rows.forEach(r => r.tags.split(',').forEach(t => { const s = t.trim(); if (s) counts[s] = (counts[s]||0) + 1; }));
+    const tags = Object.entries(counts).map(([name, count]) => ({ name, count }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    res.json(tags);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Rename a tag across all guests
+app.post('/api/tags/rename', requireAuth, async (req, res) => {
+  const { from, to } = req.body;
+  if (!from || !to || !to.trim()) return res.status(400).json({ error: 'from and to required' });
+  try {
+    const { rows } = await pool.query(`SELECT id, tags FROM guests WHERE tags ILIKE $1`, [`%${from}%`]);
+    let updated = 0;
+    for (const g of rows) {
+      const parts = g.tags.split(',').map(t => t.trim()).filter(Boolean);
+      const idx = parts.findIndex(t => t.toLowerCase() === from.toLowerCase());
+      if (idx === -1) continue;
+      parts[idx] = to.trim();
+      // Deduplicate (in case renaming creates a dup)
+      const unique = [...new Set(parts.map(t => t.toLowerCase()))].map(lower => parts.find(t => t.toLowerCase() === lower));
+      await pool.query('UPDATE guests SET tags=$1 WHERE id=$2', [unique.join(', '), g.id]);
+      updated++;
+    }
+    res.json({ updated });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Merge tag(s) into a target tag
+app.post('/api/tags/merge', requireAuth, async (req, res) => {
+  const { sources, target } = req.body;
+  if (!Array.isArray(sources) || !sources.length || !target) return res.status(400).json({ error: 'sources and target required' });
+  try {
+    const allNames = [...sources, target].map(t => t.toLowerCase());
+    const { rows } = await pool.query(`SELECT id, tags FROM guests WHERE tags IS NOT NULL AND tags <> ''`);
+    let updated = 0;
+    for (const g of rows) {
+      const parts = g.tags.split(',').map(t => t.trim()).filter(Boolean);
+      const hasAnySource = parts.some(t => sources.some(s => s.toLowerCase() === t.toLowerCase()));
+      if (!hasAnySource) continue;
+      // Replace source tags with target, keep others
+      const newParts = parts.map(t => sources.some(s => s.toLowerCase() === t.toLowerCase()) ? target : t);
+      const unique = [...new Set(newParts.map(t => t.toLowerCase()))].map(lower => newParts.find(t => t.toLowerCase() === lower));
+      await pool.query('UPDATE guests SET tags=$1 WHERE id=$2', [unique.join(', '), g.id]);
+      updated++;
+    }
+    res.json({ updated });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Delete a tag from all guests
+app.post('/api/tags/delete', requireAuth, async (req, res) => {
+  const { tag } = req.body;
+  if (!tag) return res.status(400).json({ error: 'tag required' });
+  try {
+    const { rows } = await pool.query(`SELECT id, tags FROM guests WHERE tags ILIKE $1`, [`%${tag}%`]);
+    let updated = 0;
+    for (const g of rows) {
+      const parts = g.tags.split(',').map(t => t.trim()).filter(Boolean);
+      const filtered = parts.filter(t => t.toLowerCase() !== tag.toLowerCase());
+      await pool.query('UPDATE guests SET tags=$1 WHERE id=$2', [filtered.join(', '), g.id]);
+      updated++;
+    }
+    res.json({ updated });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/guests/:id/events', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`

@@ -220,6 +220,7 @@ tr:hover td{background:#fafafa}
     <div class="nav-tabs">
       <div class="nav-tab active" onclick="showView('events')">Events</div>
       <div class="nav-tab" onclick="showView('guests')">Guest Database</div>
+      <div class="nav-tab" onclick="showView('tags')">Tag Manager</div>
       <div class="nav-tab" onclick="showView('venues')">Venues</div>
     </div>
     <div class="nav-right">
@@ -475,6 +476,39 @@ tr:hover td{background:#fafafa}
         </div>
       </div>
     </div>
+    <!-- Tag Manager view -->
+    <div class="view" id="viewTags">
+      <div class="page-head">
+        <h1>Tag Manager</h1>
+      </div>
+      <p style="color:var(--muted);font-size:14px;margin-bottom:20px">Manage tags across your guest database. Rename, merge or delete tags in bulk.</p>
+      <div class="card">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Tag</th><th>Guests</th><th style="width:240px">Actions</th></tr></thead>
+            <tbody id="tagManagerTbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div style="margin-top:20px">
+        <div class="card" style="padding:20px">
+          <h3 style="font-size:15px;margin:0 0 14px;color:var(--txt)">Merge Tags</h3>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Select tags above, then merge them into a single target tag.</p>
+          <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px">
+              <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Tags to merge</label>
+              <div id="mergeSourceTags" style="min-height:38px;padding:8px 12px;border:1px solid var(--border);border-radius:7px;background:var(--bg);display:flex;flex-wrap:wrap;gap:6px;font-size:13px;color:var(--muted)">Select tags using checkboxes above</div>
+            </div>
+            <div style="flex:1;min-width:160px">
+              <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Merge into</label>
+              <input id="mergeTarget" type="text" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:7px;font-size:14px" placeholder="Target tag name">
+            </div>
+            <button class="btn btn-pri btn-sm" onclick="doMergeTags()">Merge</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Venues list view -->
     <div class="view" id="viewVenues">
       <div class="page-head">
@@ -616,10 +650,11 @@ function showView(name) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
   document.getElementById('view' + name.charAt(0).toUpperCase() + name.slice(1)).classList.add('active');
-  const tabs = { events: 0, guests: 1, venues: 2, venue: 2 };
+  const tabs = { events: 0, guests: 1, tags: 2, venues: 3, venue: 3 };
   const idx = tabs[name];
   if (idx !== undefined) document.querySelectorAll('.nav-tab')[idx]?.classList.add('active');
   if (name === 'guests') { loadMasterTagBar(); loadMasterGuests(); populateExportEventFilter(); }
+  if (name === 'tags') loadTagManager();
   if (name === 'venues') loadVenues();
 }
 
@@ -1390,7 +1425,9 @@ function guestForm(g) {
     <div class="fg"><label>Email *</label><input id="gEmail" type="email" value="${escH(g?.email||'')}"></div>
     <div class="fg"><label>Phone</label><input id="gPhone" type="text" value="${escH(g?.phone||'')}"></div>
     <div class="fg"><label>Company</label><input id="gCompany" type="text" value="${escH(g?.company||'')}"></div>
-    <div class="fg"><label>Tags</label><input id="gTags" type="text" value="${escH(g?.tags||'')}" placeholder="vip, press, speaker"></div>
+    <div class="fg span2"><label>Tags</label><input id="gTags" type="text" value="${escH(g?.tags||'')}" placeholder="vip, press, speaker">
+      <div id="gTagSuggestions" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"></div>
+    </div>
     <div class="fg span2"><label>Notes</label><textarea id="gNotes" rows="2">${escH(g?.notes||'')}</textarea></div>
   </div>`;
 }
@@ -1398,6 +1435,7 @@ function guestForm(g) {
 function openNewGuest() {
   showModal('Add Guest', guestForm(),
     [{label:'Cancel',fn:'closeModal',cls:'btn-sec'},{label:'Add Guest',fn:'doSaveMasterGuest()',cls:'btn-pri'}]);
+  loadGuestTagSuggestions();
 }
 
 function openEditGuest(id) {
@@ -1405,6 +1443,23 @@ function openEditGuest(id) {
   if (!g) return;
   showModal('Edit Guest', guestForm(g),
     [{label:'Cancel',fn:'closeModal',cls:'btn-sec'},{label:'Save',fn:`doSaveMasterGuest(${id})`,cls:'btn-pri'}]);
+  loadGuestTagSuggestions();
+}
+
+async function loadGuestTagSuggestions() {
+  const tags = await apiFetch('/api/guests/tags') || [];
+  const el = document.getElementById('gTagSuggestions');
+  if (!el || !tags.length) return;
+  el.innerHTML = tags.map(t =>
+    `<span class="tag-chip" style="font-size:12px;padding:4px 10px" onclick="addTagToInput('${escH(t)}')">${escH(t)}</span>`
+  ).join('');
+}
+
+function addTagToInput(tag) {
+  const input = document.getElementById('gTags');
+  const existing = input.value.split(',').map(t => t.trim()).filter(Boolean);
+  if (existing.some(t => t.toLowerCase() === tag.toLowerCase())) return;
+  input.value = existing.length ? existing.join(', ') + ', ' + tag : tag;
 }
 
 async function doSaveMasterGuest(id) {
@@ -1587,6 +1642,96 @@ function escH(s) {
 function fmtDate(d) {
   if (!d) return '';
   return new Date(d).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
+}
+
+// ── Tag Manager ───────────────────────────────────────────────────────────
+let allTagsData = [];
+let mergeSelectedTags = new Set();
+
+async function loadTagManager() {
+  allTagsData = await apiFetch('/api/tags') || [];
+  mergeSelectedTags.clear();
+  updateMergeSourceDisplay();
+  const tbody = document.getElementById('tagManagerTbody');
+  if (!allTagsData.length) {
+    tbody.innerHTML = '<tr><td colspan="3" style="color:var(--muted);padding:20px">No tags found</td></tr>';
+    return;
+  }
+  tbody.innerHTML = allTagsData.map(t => `
+    <tr>
+      <td>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" value="${escH(t.name)}" onchange="toggleMergeTag('${escH(t.name)}', this.checked)" style="accent-color:var(--acc);width:15px;height:15px;cursor:pointer">
+          <span class="tag-chip on" style="pointer-events:none;font-size:12px;padding:4px 12px">${escH(t.name)}</span>
+        </label>
+      </td>
+      <td style="color:var(--muted)">${t.count} guest${t.count!==1?'s':''}</td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-sec btn-sm" onclick="openRenameTag('${escH(t.name)}')">Rename</button>
+        <button class="btn btn-err btn-sm" onclick="deleteTag('${escH(t.name)}')">Delete</button>
+      </td>
+    </tr>`).join('');
+}
+
+function toggleMergeTag(tag, on) {
+  if (on) mergeSelectedTags.add(tag); else mergeSelectedTags.delete(tag);
+  updateMergeSourceDisplay();
+}
+
+function updateMergeSourceDisplay() {
+  const el = document.getElementById('mergeSourceTags');
+  if (!mergeSelectedTags.size) {
+    el.innerHTML = '<span style="color:var(--muted)">Select tags using checkboxes above</span>';
+    return;
+  }
+  el.innerHTML = [...mergeSelectedTags].map(t =>
+    `<span class="tag-chip on" style="pointer-events:none;font-size:12px;padding:3px 10px">${escH(t)}</span>`
+  ).join('');
+}
+
+function openRenameTag(tag) {
+  showModal('Rename Tag', `
+    <p style="font-size:14px;color:var(--txt);margin-bottom:16px">Rename <strong>${escH(tag)}</strong> across all guests.</p>
+    <div class="fg"><label>New name</label><input id="renameTagInput" type="text" value="${escH(tag)}"></div>`,
+    [{label:'Cancel',fn:'closeModal',cls:'btn-sec'},{label:'Rename',fn:`doRenameTag('${escH(tag)}')`,cls:'btn-pri'}]);
+}
+
+async function doRenameTag(from) {
+  const to = document.getElementById('renameTagInput').value.trim();
+  if (!to) { toast('Name required','err'); return; }
+  if (to === from) { closeModal(); return; }
+  const r = await apiFetch('/api/tags/rename', { method:'POST', body: { from, to } });
+  if (r) {
+    closeModal();
+    toast(`Renamed "${from}" → "${to}" (${r.updated} guests updated)`, 'ok');
+    loadTagManager();
+    loadMasterTagBar();
+  }
+}
+
+async function deleteTag(tag) {
+  if (!confirm(`Delete tag "${tag}" from all guests?`)) return;
+  const r = await apiFetch('/api/tags/delete', { method:'POST', body: { tag } });
+  if (r) {
+    toast(`Deleted "${tag}" from ${r.updated} guests`, 'ok');
+    loadTagManager();
+    loadMasterTagBar();
+  }
+}
+
+async function doMergeTags() {
+  const sources = [...mergeSelectedTags];
+  const target = document.getElementById('mergeTarget').value.trim();
+  if (!sources.length) { toast('Select tags to merge using the checkboxes', 'err'); return; }
+  if (!target) { toast('Enter a target tag name', 'err'); return; }
+  if (!confirm(`Merge ${sources.map(s=>'"'+s+'"').join(', ')} into "${target}"?`)) return;
+  const r = await apiFetch('/api/tags/merge', { method:'POST', body: { sources, target } });
+  if (r) {
+    toast(`Merged into "${target}" (${r.updated} guests updated)`, 'ok');
+    document.getElementById('mergeTarget').value = '';
+    loadTagManager();
+    loadMasterTagBar();
+  }
 }
 
 // ── Venues ─────────────────────────────────────────────────────────────────
