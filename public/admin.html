@@ -140,6 +140,9 @@ tr:hover td{background:#fafafa}
 .modal-footer{display:flex;justify-content:flex-end;gap:10px;margin-top:24px;padding-top:18px;border-top:1px solid var(--border)}
 
 /* Guest selector */
+.tag-chip{display:inline-flex;align-items:center;gap:5px;padding:6px 14px;border-radius:20px;font-size:13px;font-weight:500;cursor:pointer;border:1.5px solid var(--border);background:#fff;color:var(--txt);transition:all .15s}
+.tag-chip:hover{border-color:var(--acc);background:#f5f3ff}
+.tag-chip.on{background:var(--acc);color:#fff;border-color:var(--acc)}
 .guest-picker{border:1.5px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:12px}
 .guest-picker-search{width:100%;padding:10px 14px;border:none;border-bottom:1px solid var(--border);font-size:14px;outline:none}
 .guest-picker-list{max-height:220px;overflow-y:auto}
@@ -457,9 +460,12 @@ tr:hover td{background:#fafafa}
         </div>
         <div style="font-size:12px;color:var(--muted);margin-top:10px">Filters are combined — leave blank to export all guests.</div>
       </div>
-      <div class="search-row">
-        <input class="search-input" id="masterSearch" placeholder="Search by name, email or company…" oninput="loadMasterGuests()">
+      <div class="search-row" style="gap:8px">
+        <input class="search-input" id="masterSearch" placeholder="Search by name, email or company…" style="flex:1" onkeydown="if(event.key==='Enter')loadMasterGuests()">
+        <button class="btn btn-pri btn-sm" onclick="loadMasterGuests()" style="white-space:nowrap">Search now</button>
+        <button class="btn btn-sec btn-sm" onclick="clearMasterFilters()" style="white-space:nowrap">Clear filters</button>
       </div>
+      <div id="masterTagBar" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px"></div>
       <div class="card">
         <div class="tbl-wrap">
           <table>
@@ -613,7 +619,7 @@ function showView(name) {
   const tabs = { events: 0, guests: 1, venues: 2, venue: 2 };
   const idx = tabs[name];
   if (idx !== undefined) document.querySelectorAll('.nav-tab')[idx]?.classList.add('active');
-  if (name === 'guests') { loadMasterGuests(); populateExportEventFilter(); }
+  if (name === 'guests') { loadMasterTagBar(); loadMasterGuests(); populateExportEventFilter(); }
   if (name === 'venues') loadVenues();
 }
 
@@ -1210,9 +1216,40 @@ async function deleteQuestion(qid) {
 }
 
 // ── Master Guest Database ──────────────────────────────────────────────────
+let masterSelectedTags = new Set();
+
+async function loadMasterTagBar() {
+  const tags = await apiFetch('/api/guests/tags') || [];
+  const bar = document.getElementById('masterTagBar');
+  if (!tags.length) { bar.innerHTML = ''; return; }
+  bar.innerHTML = tags.map(t =>
+    `<span class="tag-chip${masterSelectedTags.has(t)?' on':''}" onclick="toggleMasterTag(this,'${escH(t)}')">${escH(t)}</span>`
+  ).join('');
+}
+
+function toggleMasterTag(el, tag) {
+  if (masterSelectedTags.has(tag)) {
+    masterSelectedTags.delete(tag);
+    el.classList.remove('on');
+  } else {
+    masterSelectedTags.add(tag);
+    el.classList.add('on');
+  }
+}
+
+function clearMasterFilters() {
+  masterSelectedTags.clear();
+  document.getElementById('masterSearch').value = '';
+  document.querySelectorAll('#masterTagBar .tag-chip').forEach(c => c.classList.remove('on'));
+  loadMasterGuests();
+}
+
 async function loadMasterGuests() {
   const q = document.getElementById('masterSearch').value;
-  const url = q ? `/api/guests?q=${encodeURIComponent(q)}` : '/api/guests';
+  const params = new URLSearchParams();
+  if (q) params.set('q', q);
+  if (masterSelectedTags.size) params.set('tag', [...masterSelectedTags].join(','));
+  const url = '/api/guests' + (params.toString() ? '?' + params.toString() : '');
   allMasterGuests = await apiFetch(url) || [];
   const tbody = document.getElementById('masterGuestTbody');
   if (!allMasterGuests.length) {
