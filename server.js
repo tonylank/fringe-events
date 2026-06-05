@@ -146,6 +146,9 @@ async function migrate() {
     await client.query(`ALTER TABLE event_guests ADD COLUMN IF NOT EXISTS resend_email_id TEXT`);
     await client.query(`ALTER TABLE event_guests ADD COLUMN IF NOT EXISTS email_status TEXT`);
     await client.query(`ALTER TABLE event_guests ADD COLUMN IF NOT EXISTS email_status_at TIMESTAMPTZ`);
+    await client.query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS invitation_text TEXT`);
+    await client.query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS reminder_text TEXT`);
+    await client.query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS allow_open_rsvp BOOLEAN DEFAULT false`);
 
     // Seed default admin if none exists
     const { rows } = await client.query('SELECT COUNT(*) FROM admin_users');
@@ -260,7 +263,7 @@ ${event.hero_image_url?`<img class="hero" src="${esc(event.hero_image_url.starts
 ${event.venue_name?`<strong>${esc(event.venue_name)}</strong>${event.venue_address?', '+esc(event.venue_address):''}`:''}
 ${event.dress_code?`<br>Dress code: <strong>${esc(event.dress_code)}</strong>`:''}</div>
 <p>Dear ${esc(guest.first_name)},</p>
-<p>${esc(event.description||'You are cordially invited to join us for this special event.')}</p>
+<p>${esc((event.invitation_text || event.description || 'You are cordially invited to join us for this special event.').replace('{guest_name}', guest.first_name))}</p>
 <p>Please click below to confirm your attendance:</p>
 <a class="btn" href="${rsvpUrl}">RSVP Now →</a>
 ${event.rsvp_deadline?`<p style="font-size:13px;color:#888">Please respond by ${new Date(event.rsvp_deadline).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}</p>`:''}
@@ -533,7 +536,7 @@ h1,h2,h3,.mini-card h2{font-family:'Playfair Display',Georgia,serif}
       ${event.accessibility_info?`<br><a href="#" style="font-size:13px;color:#7C3AED;text-decoration:underline;text-underline-offset:2px" onclick="event.preventDefault();document.getElementById('accessModal').classList.add('open')">Accessibility information</a>`:''}
     </div>
     <p style="font-size:16px;color:#444;margin-bottom:8px">Dear <strong>${esc(guest.first_name)}</strong>,</p>
-    <p style="font-size:15px;color:#444;line-height:1.7">${esc(event.description||'You are cordially invited to join us for this special event.').replace(/\n/g,'<br>')}</p>
+    <p style="font-size:15px;color:#444;line-height:1.7">${esc((event.invitation_text || event.description || 'You are cordially invited to join us for this special event.').replace('{guest_name}', guest.first_name)).replace(/\n/g,'<br>')}</p>
     ${event.rsvp_deadline?`<p style="font-size:13px;color:#888;margin-top:10px">Please respond by <strong>${new Date(event.rsvp_deadline).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}</strong></p>`:''}
   </div>
 
@@ -715,21 +718,24 @@ app.post('/api/events', requireAuth, async (req, res) => {
   const { name, event_date, end_date, venue_name, venue_address, venue_lat, venue_lng,
     description, hero_image_url, dress_code, rsvp_deadline, max_guests, allow_plus_one,
     check_in_pin, email_subject, email_from_name, email_reply_to, status,
-    hashtags, allow_online, online_link, accessibility_info, venue_id, venue_room, hire_cost } = req.body;
+    hashtags, allow_online, online_link, accessibility_info, venue_id, venue_room, hire_cost,
+    invitation_text, reminder_text, allow_open_rsvp } = req.body;
   if (!name || !event_date) return res.status(400).json({ error: 'Name and date required' });
   try {
     const slug = genSlug(name);
     const { rows } = await pool.query(`
       INSERT INTO events (slug,name,event_date,end_date,venue_name,venue_address,venue_lat,venue_lng,
         description,hero_image_url,dress_code,rsvp_deadline,max_guests,allow_plus_one,
-        check_in_pin,email_subject,email_from_name,email_reply_to,status,hashtags,allow_online,online_link,accessibility_info,venue_id,venue_room,hire_cost)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26) RETURNING *`,
+        check_in_pin,email_subject,email_from_name,email_reply_to,status,hashtags,allow_online,online_link,accessibility_info,venue_id,venue_room,hire_cost,
+        invitation_text,reminder_text,allow_open_rsvp)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29) RETURNING *`,
       [slug,name,event_date,end_date||null,venue_name||null,venue_address||null,
        venue_lat||null,venue_lng||null,description||null,hero_image_url||null,
        dress_code||null,rsvp_deadline||null,max_guests||null,allow_plus_one||false,
        check_in_pin||null,email_subject||null,email_from_name||null,email_reply_to||null,
        status||'draft',hashtags||null,allow_online||false,online_link||null,accessibility_info||null,
-       venue_id||null,venue_room||null,hire_cost||null]);
+       venue_id||null,venue_room||null,hire_cost||null,
+       invitation_text||null,reminder_text||null,allow_open_rsvp||false]);
     res.json(rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -746,7 +752,8 @@ app.put('/api/events/:id', requireAuth, async (req, res) => {
   const { name, event_date, end_date, venue_name, venue_address, venue_lat, venue_lng,
     description, hero_image_url, dress_code, rsvp_deadline, max_guests, allow_plus_one,
     check_in_pin, email_subject, email_from_name, email_reply_to, status,
-    hashtags, allow_online, online_link, accessibility_info, venue_id, venue_room, hire_cost } = req.body;
+    hashtags, allow_online, online_link, accessibility_info, venue_id, venue_room, hire_cost,
+    invitation_text, reminder_text, allow_open_rsvp } = req.body;
   try {
     const { rows } = await pool.query(`
       UPDATE events SET name=$1,event_date=$2,end_date=$3,venue_name=$4,venue_address=$5,
@@ -754,13 +761,15 @@ app.put('/api/events/:id', requireAuth, async (req, res) => {
         rsvp_deadline=$11,max_guests=$12,allow_plus_one=$13,check_in_pin=$14,
         email_subject=$15,email_from_name=$16,email_reply_to=$17,status=$18,
         hashtags=$19,allow_online=$20,online_link=$21,accessibility_info=$22,
-        venue_id=$23,venue_room=$24,hire_cost=$25,updated_at=NOW() WHERE id=$26 RETURNING *`,
+        venue_id=$23,venue_room=$24,hire_cost=$25,
+        invitation_text=$26,reminder_text=$27,allow_open_rsvp=$28,updated_at=NOW() WHERE id=$29 RETURNING *`,
       [name,event_date,end_date||null,venue_name||null,venue_address||null,
        venue_lat||null,venue_lng||null,description||null,hero_image_url||null,
        dress_code||null,rsvp_deadline||null,max_guests||null,allow_plus_one||false,
        check_in_pin||null,email_subject||null,email_from_name||null,email_reply_to||null,
        status||'draft',hashtags||null,allow_online||false,online_link||null,accessibility_info||null,
-       venue_id||null,venue_room||null,hire_cost||null,req.params.id]);
+       venue_id||null,venue_room||null,hire_cost||null,
+       invitation_text||null,reminder_text||null,allow_open_rsvp||false,req.params.id]);
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
     res.json(rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -1220,7 +1229,11 @@ app.post('/api/events/:id/send-reminders', requireAuth, async (req, res) => {
     let sent = 0, failed = 0;
     for (const eg of pending) {
       try {
-        const html = buildInvitationHtml(event, eg, eg);
+        // Use reminder-specific text if set, otherwise fall back to invitation template
+        const reminderEvent = event.reminder_text
+          ? { ...event, invitation_text: event.reminder_text }
+          : event;
+        const html = buildInvitationHtml(reminderEvent, eg, eg);
         const emailId = await sendEmail({
           to: eg.email,
           toName: `${eg.first_name} ${eg.last_name}`,
@@ -1235,6 +1248,99 @@ app.post('/api/events/:id/send-reminders', requireAuth, async (req, res) => {
       } catch { failed++; }
     }
     res.json({ sent, failed });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Open RSVP (self-registration) ──────────────────────────────────────────
+app.get('/rsvp/open/:slug', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM events WHERE slug=$1', [req.params.slug]);
+    if (!rows.length) return res.status(404).send('Event not found');
+    const event = rows[0];
+    if (!event.allow_open_rsvp) return res.status(403).send('Open RSVP is not enabled for this event');
+    const isPastDeadline = event.rsvp_deadline && new Date(event.rsvp_deadline) < new Date();
+    if (isPastDeadline) return res.status(403).send('RSVP deadline has passed');
+
+    res.send(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${esc(event.name)} — RSVP</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@400;600;700&display=swap" rel="stylesheet">
+<style>*{box-sizing:border-box;margin:0;padding:0}body{background:#0f0720;font-family:'DM Sans',sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+h1{font-family:'Playfair Display',serif;color:#2D1B69;font-size:22px;margin-bottom:6px}
+.card{background:#fff;border-radius:16px;padding:32px;max-width:460px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.meta{color:#666;font-size:14px;line-height:1.8;margin-bottom:20px}
+.desc{color:#444;font-size:14px;line-height:1.7;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid #eee}
+.fg{margin-bottom:14px}.fg label{display:block;font-size:13px;font-weight:600;color:#333;margin-bottom:5px}
+.fg input{width:100%;padding:10px 14px;border:1.5px solid #ddd;border-radius:6px;font-size:15px;font-family:inherit}
+.fg input:focus{border-color:#7C3AED;outline:none}
+.btn{width:100%;padding:14px;background:#7C3AED;color:#fff;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:4px}
+.btn:hover{background:#6D28D9}.btn:disabled{background:#ccc;cursor:not-allowed}
+.msg{padding:12px;border-radius:8px;font-size:14px;font-weight:600;margin-top:14px;text-align:center;display:none}
+.msg.ok{display:block;background:#d1fae5;color:#065f46}.msg.err{display:block;background:#fee2e2;color:#991b1b}
+</style></head><body>
+<div class="card">
+  ${event.hero_image_url?`<img src="${esc(event.hero_image_url)}" style="width:100%;border-radius:12px 12px 0 0;margin:-32px -32px 20px;width:calc(100% + 64px);display:block" alt="">`:''}
+  <h1>${esc(event.name)}</h1>
+  <div class="meta">
+    <strong>${fmtDate(event.event_date)}</strong> at <strong>${fmtTime(event.event_date)}</strong><br>
+    ${event.venue_name?`${esc(event.venue_name)}${event.venue_address?', '+esc(event.venue_address):''}`:''}
+  </div>
+  ${event.invitation_text||event.description?`<div class="desc">${esc(event.invitation_text||event.description).replace(/\\{guest_name\\}/g,'').replace(/\n/g,'<br>')}</div>`:''}
+  <form onsubmit="doRsvp(event)">
+    <div class="fg"><label>First Name *</label><input id="fn" required></div>
+    <div class="fg"><label>Last Name *</label><input id="ln" required></div>
+    <div class="fg"><label>Email *</label><input id="em" type="email" required></div>
+    <button class="btn" id="sb" type="submit">RSVP Now</button>
+  </form>
+  <div class="msg" id="msg"></div>
+</div>
+<script>
+async function doRsvp(e){
+  e.preventDefault();
+  const btn=document.getElementById('sb');btn.disabled=true;btn.textContent='Submitting…';
+  const msg=document.getElementById('msg');msg.className='msg';msg.style.display='none';
+  try{
+    const r=await fetch('/rsvp/open/${event.slug}',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({first_name:document.getElementById('fn').value.trim(),last_name:document.getElementById('ln').value.trim(),email:document.getElementById('em').value.trim()})});
+    const j=await r.json();
+    if(r.ok){msg.className='msg ok';msg.textContent='Thank you! You have been registered. Check your email for confirmation.';msg.style.display='block';btn.textContent='Registered ✓';}
+    else{msg.className='msg err';msg.textContent=j.error||'Something went wrong';msg.style.display='block';btn.disabled=false;btn.textContent='RSVP Now';}
+  }catch{msg.className='msg err';msg.textContent='Network error — please try again';msg.style.display='block';btn.disabled=false;btn.textContent='RSVP Now';}
+}
+</script></body></html>`);
+  } catch (e) { res.status(500).send('Server error'); }
+});
+
+app.post('/rsvp/open/:slug', async (req, res) => {
+  const { first_name, last_name, email } = req.body;
+  if (!first_name || !last_name || !email) return res.status(400).json({ error: 'All fields are required' });
+  try {
+    const { rows } = await pool.query('SELECT * FROM events WHERE slug=$1', [req.params.slug]);
+    if (!rows.length) return res.status(404).json({ error: 'Event not found' });
+    const event = rows[0];
+    if (!event.allow_open_rsvp) return res.status(403).json({ error: 'Open RSVP not enabled' });
+
+    // Upsert guest
+    let guest = (await pool.query('SELECT * FROM guests WHERE email=$1', [email.toLowerCase()])).rows[0];
+    if (!guest) {
+      guest = (await pool.query(
+        'INSERT INTO guests (email,first_name,last_name) VALUES ($1,$2,$3) RETURNING *',
+        [email.toLowerCase(), first_name, last_name]
+      )).rows[0];
+    }
+
+    // Add to event (skip if already there)
+    const code = genCode();
+    const { rowCount } = await pool.query(
+      'INSERT INTO event_guests (event_id,guest_id,rsvp_code,status) VALUES ($1,$2,$3,$4) ON CONFLICT (event_id,guest_id) DO NOTHING',
+      [event.id, guest.id, code, 'accepted']
+    );
+    if (!rowCount) return res.json({ ok: true, message: 'Already registered' });
+
+    // Send confirmation
+    const eg = (await pool.query('SELECT * FROM event_guests WHERE event_id=$1 AND guest_id=$2', [event.id, guest.id])).rows[0];
+    sendRsvpConfirmation(event, guest, eg).catch(e => console.error('Open RSVP confirmation failed:', e));
+
+    res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

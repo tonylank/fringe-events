@@ -332,6 +332,39 @@ tr:hover td{background:#fafafa}
         </div>
       </div>
 
+      <!-- Email Designer section -->
+      <div class="card" style="margin-top:20px">
+        <div class="card-head"><h2>Email Designer</h2><button class="btn btn-pri btn-sm" onclick="saveEventDetails()">Save Changes</button></div>
+        <div class="card-body">
+          <div class="form-grid">
+            <div class="fg span2">
+              <label>Invitation Email Text <span style="font-weight:400;color:var(--muted)">Use {guest_name} to insert the guest's first name</span></label>
+              <textarea id="evInvitationText" rows="5" placeholder="You are cordially invited to join us for this special event.&#10;&#10;We would be delighted to welcome you…"></textarea>
+              <div style="display:flex;gap:8px;margin-top:10px">
+                <button class="btn btn-sec btn-sm" onclick="previewInvitation()">Preview Invitation</button>
+                <button class="btn btn-sec btn-sm" onclick="downloadInvitation()">Download Generic Invitation</button>
+              </div>
+            </div>
+            <div class="fg span2">
+              <label>Reminder Email Text <span style="font-weight:400;color:var(--muted)">Leave blank to re-use the invitation text above</span></label>
+              <textarea id="evReminderText" rows="4" placeholder="Just a friendly reminder that we haven't received your RSVP yet…"></textarea>
+            </div>
+            <div class="fg span2" style="background:#f5f3ff;border:1.5px solid #e0d9f5;border-radius:8px;padding:14px">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:0">
+                <input type="checkbox" id="evAllowOpenRsvp" onchange="toggleOpenRsvpUrl()"> Enable Open RSVP link
+              </label>
+              <p style="font-size:12px;color:var(--muted);margin-top:6px">Allow anyone with the link to register themselves for this event (adds them to the guest database automatically).</p>
+              <div id="openRsvpUrlWrap" style="display:none;margin-top:10px">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <input id="openRsvpUrl" type="text" readonly style="flex:1;background:#f9fafb;color:var(--txt);cursor:text;font-size:13px">
+                  <button class="btn btn-sec btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('openRsvpUrl').value);toast('Copied','ok')">Copy</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Guests tab -->
       <div class="tab-pane" id="tabGuests">
         <div class="page-head" style="margin-bottom:16px">
@@ -773,6 +806,10 @@ async function openEvent(id) {
   document.getElementById('evFromName').value = ev.email_from_name || '';
   document.getElementById('evReplyTo').value = ev.email_reply_to || 'rsvp@edfringe.com';
   document.getElementById('evSubject').value = ev.email_subject || '';
+  document.getElementById('evInvitationText').value = ev.invitation_text || '';
+  document.getElementById('evReminderText').value = ev.reminder_text || '';
+  document.getElementById('evAllowOpenRsvp').checked = !!ev.allow_open_rsvp;
+  toggleOpenRsvpUrl();
   loadEventStats();
 }
 
@@ -890,6 +927,9 @@ async function saveEventDetails() {
     email_from_name: document.getElementById('evFromName').value,
     email_reply_to: document.getElementById('evReplyTo').value,
     email_subject: document.getElementById('evSubject').value,
+    invitation_text: document.getElementById('evInvitationText').value || null,
+    reminder_text: document.getElementById('evReminderText').value || null,
+    allow_open_rsvp: document.getElementById('evAllowOpenRsvp').checked,
     status: document.getElementById('evStatus').value,
   };
   const r = await apiFetch(`/api/events/${currentEventId}`, { method:'PUT', body });
@@ -1626,6 +1666,101 @@ async function apiFetch(url, opts) {
 function toggleOnlineLink() {
   const on = document.getElementById('evAllowOnline').checked;
   document.getElementById('onlineLinkWrap').style.display = on ? 'block' : 'none';
+}
+
+function toggleOpenRsvpUrl() {
+  const on = document.getElementById('evAllowOpenRsvp').checked;
+  const wrap = document.getElementById('openRsvpUrlWrap');
+  wrap.style.display = on ? 'block' : 'none';
+  if (on && currentEventSlug) {
+    document.getElementById('openRsvpUrl').value = window.location.origin + '/rsvp/open/' + currentEventSlug;
+  }
+}
+
+function previewInvitation() {
+  const text = document.getElementById('evInvitationText').value || document.getElementById('evDesc').value || 'You are cordially invited to join us for this special event.';
+  const name = document.getElementById('evName').value || 'Event';
+  const date = document.getElementById('evDate').value;
+  const venue = document.getElementById('evVenueName').value || '';
+  const addr = document.getElementById('evVenueAddr').value || '';
+  const dress = document.getElementById('evDress').value || '';
+  const heroUrl = document.getElementById('evHero').value || '';
+  const w = window.open('', '_blank', 'width=640,height=800');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@400;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;background:#f4f4f8;font-family:'DM Sans',sans-serif;padding:40px 20px}
+.w{max-width:600px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08)}
+.hero{width:100%;display:block;background:#2D1B69;min-height:${heroUrl?'auto':'60px'}}
+.c{padding:40px}h1{margin:0 0 8px;font-size:28px;color:#2D1B69;font-family:'Playfair Display',serif}
+.meta{color:#666;font-size:15px;margin-bottom:24px;line-height:2}.meta strong{color:#333}
+p{color:#444;line-height:1.7;font-size:16px}
+.btn{display:inline-block;margin:24px 0 12px;padding:16px 36px;background:#7C3AED;color:#fff;text-decoration:none;border-radius:8px;font-size:17px;font-weight:700}
+.ft{padding:20px 40px;background:#f8f7ff;font-size:13px;color:#888;border-top:1px solid #eee}
+</style></head><body>
+<div style="text-align:center;margin-bottom:20px;font-size:12px;color:#999;text-transform:uppercase;letter-spacing:2px">Invitation Preview</div>
+<div class="w">
+${heroUrl?`<img class="hero" src="${heroUrl}" alt="">`:'<div class="hero"></div>'}
+<div class="c">
+<h1>${name}</h1>
+<div class="meta">
+<strong>${date?new Date(date).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'}):''}</strong>${date?' at <strong>'+new Date(date).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+'</strong>':''}<br>
+${venue?'<strong>'+venue+'</strong>'+(addr?', '+addr:''):''}
+${dress?'<br>Dress code: <strong>'+dress+'</strong>':''}
+</div>
+<p>Dear <strong>Guest</strong>,</p>
+<p>${text.replace(/\\{guest_name\\}/g,'Guest').replace(/\\n/g,'<br>')}</p>
+<a class="btn" href="#">RSVP Now →</a>
+</div>
+<div class="ft">This is a preview of the invitation email.</div>
+</div></body></html>`);
+  w.document.close();
+}
+
+function downloadInvitation() {
+  const text = document.getElementById('evInvitationText').value || document.getElementById('evDesc').value || 'You are cordially invited to join us for this special event.';
+  const name = document.getElementById('evName').value || 'Event';
+  const date = document.getElementById('evDate').value;
+  const venue = document.getElementById('evVenueName').value || '';
+  const addr = document.getElementById('evVenueAddr').value || '';
+  const dress = document.getElementById('evDress').value || '';
+  const heroUrl = document.getElementById('evHero').value || '';
+  const openRsvpEnabled = document.getElementById('evAllowOpenRsvp').checked;
+  const rsvpUrl = openRsvpEnabled && currentEventSlug ? window.location.origin + '/rsvp/open/' + currentEventSlug : '';
+
+  const w = window.open('', '_blank');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+@media print{.no-print{display:none!important}body{background:#fff!important}}
+body{margin:0;background:#f4f4f8;font-family:'DM Sans',sans-serif;padding:40px 20px}
+.w{max-width:600px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08)}
+.hero{width:100%;display:block;background:#2D1B69;min-height:${heroUrl?'auto':'60px'}}
+.c{padding:40px}h1{margin:0 0 8px;font-size:28px;color:#2D1B69;font-family:'Playfair Display',serif}
+.meta{color:#666;font-size:15px;margin-bottom:24px;line-height:2}.meta strong{color:#333}
+p{color:#444;line-height:1.7;font-size:16px}
+.rsvp-box{margin-top:24px;padding:20px;background:#f5f3ff;border-radius:10px;border:1.5px solid #e0d9f5;text-align:center}
+.rsvp-box strong{color:#2D1B69;font-size:15px}
+.rsvp-box a{color:#7C3AED;font-size:14px;word-break:break-all}
+.ft{padding:20px 40px;background:#f8f7ff;font-size:13px;color:#888;border-top:1px solid #eee}
+.toolbar{text-align:center;margin-bottom:20px}
+.toolbar button{padding:10px 24px;background:#7C3AED;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}
+</style></head><body>
+<div class="toolbar no-print"><button onclick="window.print()">🖨 Print / Save as PDF</button></div>
+<div class="w">
+${heroUrl?`<img class="hero" src="${heroUrl}" alt="">`:'<div class="hero"></div>'}
+<div class="c">
+<h1>${name}</h1>
+<div class="meta">
+<strong>${date?new Date(date).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'}):''}</strong>${date?' at <strong>'+new Date(date).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+'</strong>':''}<br>
+${venue?'<strong>'+venue+'</strong>'+(addr?', '+addr:''):''}
+${dress?'<br>Dress code: <strong>'+dress+'</strong>':''}
+</div>
+<p>${text.replace(/\\{guest_name\\}/g,'').replace(/\n/g,'<br>')}</p>
+${rsvpUrl?`<div class="rsvp-box"><strong>RSVP Online</strong><br><a href="${rsvpUrl}">${rsvpUrl}</a></div>`:'<div class="rsvp-box"><strong>Please RSVP</strong><br><span style="font-size:13px;color:#666">Contact the event organiser to confirm your attendance</span></div>'}
+</div>
+<div class="ft">${name}</div>
+</div></body></html>`);
+  w.document.close();
 }
 
 // ── Hero Image Upload & Crop ───────────────────────────────────────────────
