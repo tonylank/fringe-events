@@ -81,8 +81,22 @@ body{font-family:'DM Sans',-apple-system,sans-serif;background:#0f0720;min-heigh
 
 .empty{text-align:center;padding:48px 20px;color:rgba(255,255,255,.45)}
 .empty-icon{font-size:48px;margin-bottom:12px}
-.stats-bar{background:rgba(255,255,255,.08);padding:12px 20px;display:flex;gap:20px;flex-wrap:wrap;border-bottom:1px solid rgba(255,255,255,.08)}
+.stats-bar{background:rgba(255,255,255,.08);padding:12px 20px;display:flex;gap:20px;flex-wrap:wrap;align-items:center;border-bottom:1px solid rgba(255,255,255,.08)}
 .stat{font-size:13px;color:rgba(255,255,255,.75)}.stat strong{color:#fff;font-size:16px;margin-right:4px}
+.toggle-wrap{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px;color:rgba(255,255,255,.65)}
+.toggle-switch{position:relative;width:40px;height:22px;cursor:pointer}
+.toggle-switch input{opacity:0;width:0;height:0}
+.toggle-track{position:absolute;inset:0;background:rgba(255,255,255,.2);border-radius:11px;transition:background .2s}
+.toggle-switch input:checked+.toggle-track{background:var(--ok)}
+.toggle-knob{position:absolute;top:2px;left:2px;width:18px;height:18px;background:#fff;border-radius:50%;transition:transform .2s}
+.toggle-switch input:checked~.toggle-knob{transform:translateX(18px)}
+.checkedin-section{padding:12px 20px;max-width:600px;margin:0 auto}
+.checkedin-heading{font-size:13px;font-weight:700;color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;padding-top:12px;border-top:1px solid rgba(255,255,255,.08)}
+.ci-item{display:flex;align-items:center;gap:12px;padding:10px 14px;background:rgba(255,255,255,.06);border-radius:10px;margin-bottom:6px}
+.ci-avatar{width:34px;height:34px;border-radius:50%;background:var(--ok);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0}
+.ci-name{font-size:14px;font-weight:600;color:#fff;flex:1}
+.ci-time{font-size:12px;color:rgba(255,255,255,.5)}
+.ci-plus{font-size:12px;color:rgba(255,255,255,.4);margin-left:46px;margin-top:-4px;margin-bottom:4px}
 
 .success-flash{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--ok);color:#fff;padding:28px 40px;border-radius:16px;font-size:22px;font-weight:700;z-index:999;text-align:center;pointer-events:none;opacity:0;transition:opacity .2s;box-shadow:0 8px 40px rgba(0,0,0,.4)}
 .success-flash.show{opacity:1}
@@ -121,6 +135,10 @@ body{font-family:'DM Sans',-apple-system,sans-serif;background:#0f0720;min-heigh
   <div class="results" id="results">
     <div class="empty"><div class="empty-icon">🔍</div><div>Search for a guest to check them in</div></div>
   </div>
+  <div class="checkedin-section" id="checkedinSection">
+    <div class="checkedin-heading" id="checkedinHeading">Checked In</div>
+    <div id="checkedinList"></div>
+  </div>
 </div>
 
 <div class="success-flash" id="flash"></div>
@@ -133,6 +151,8 @@ const eventSlug = pathParts[pathParts.length - 1];
 
 let eventId = null;
 let searchTimer;
+let refreshEnabled = true;
+let refreshInterval = null;
 
 async function verifyPin() {
   const pin = document.getElementById('pinInput').value.trim();
@@ -148,6 +168,8 @@ async function verifyPin() {
     document.getElementById('appEventName').textContent = j.eventName;
     document.getElementById('searchInput').focus();
     loadStats();
+    loadCheckedIn();
+    startRefresh();
   } catch { document.getElementById('pinErr').textContent = 'Connection error'; }
 }
 
@@ -161,7 +183,15 @@ async function loadStats() {
       <div class="stat"><strong>${s.total||0}</strong>Guests</div>
       <div class="stat"><strong>${accepted}</strong>Accepted</div>
       <div class="stat"><strong>${checkedIn}</strong>Checked In</div>
-      <div class="stat"><strong>${accepted - checkedIn}</strong>Remaining</div>`;
+      <div class="stat"><strong>${accepted - checkedIn}</strong>Remaining</div>
+      <div class="toggle-wrap">
+        <span>Refresh checkins</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="refreshToggle" ${refreshEnabled?'checked':''} onchange="toggleRefresh(this.checked)">
+          <span class="toggle-track"></span>
+          <span class="toggle-knob"></span>
+        </label>
+      </div>`;
   } catch {}
 }
 
@@ -253,29 +283,78 @@ function toggleReqs(id, hasReqs) {
 async function checkIn(egId) {
   try {
     const r = await fetch(`/api/checkin/${eventId}/guests/${egId}/checkin`, { method:'POST' });
-    if (r.ok) { showFlash('✓ Checked In!'); doSearch(); loadStats(); }
+    if (r.ok) { showFlash('✓ Checked In!'); doSearch(); refreshAfterAction(); }
   } catch {}
 }
 
 async function uncheckIn(egId) {
   try {
     const r = await fetch(`/api/checkin/${eventId}/guests/${egId}/uncheckin`, { method:'POST' });
-    if (r.ok) { doSearch(); loadStats(); }
+    if (r.ok) { doSearch(); refreshAfterAction(); }
   } catch {}
 }
 
 async function checkInPlusOne(egId) {
   try {
     const r = await fetch(`/api/checkin/${eventId}/guests/${egId}/checkin-plusone`, { method:'POST' });
-    if (r.ok) { showFlash('✓ Plus One Checked In!'); doSearch(); loadStats(); }
+    if (r.ok) { showFlash('✓ Plus One Checked In!'); doSearch(); refreshAfterAction(); }
   } catch {}
 }
 
 async function uncheckInPlusOne(egId) {
   try {
     const r = await fetch(`/api/checkin/${eventId}/guests/${egId}/uncheckin-plusone`, { method:'POST' });
-    if (r.ok) { doSearch(); loadStats(); }
+    if (r.ok) { doSearch(); refreshAfterAction(); }
   } catch {}
+}
+
+function refreshAfterAction() {
+  loadStats();
+  if (refreshEnabled) loadCheckedIn();
+}
+
+async function loadCheckedIn() {
+  try {
+    const r = await fetch(`/api/checkin/${eventId}/checked-in`);
+    const guests = await r.json();
+    const heading = document.getElementById('checkedinHeading');
+    heading.textContent = `Checked In (${guests.length})`;
+    const list = document.getElementById('checkedinList');
+    if (!guests.length) {
+      list.innerHTML = '<div style="color:rgba(255,255,255,.35);font-size:13px;padding:8px 0">No guests checked in yet</div>';
+      return;
+    }
+    list.innerHTML = guests.map(g => {
+      const initials = (g.first_name[0]||'') + (g.last_name[0]||'');
+      const poChecked = g.plus_one_name && g.plus_one_checked_in_at;
+      return `<div class="ci-item">
+        <div class="ci-avatar">${initials}</div>
+        <div class="ci-name">${escH(g.first_name)} ${escH(g.last_name)}</div>
+        <div class="ci-time">${fmtTime(g.checked_in_at)}</div>
+      </div>${poChecked ? `<div class="ci-plus">+ ${escH(g.plus_one_name)} — ${fmtTime(g.plus_one_checked_in_at)}</div>` : ''}`;
+    }).join('');
+  } catch {}
+}
+
+function toggleRefresh(on) {
+  refreshEnabled = on;
+  if (on) {
+    loadCheckedIn();
+    loadStats();
+    startRefresh();
+  } else {
+    clearInterval(refreshInterval);
+    refreshInterval = null;
+  }
+}
+
+function startRefresh() {
+  clearInterval(refreshInterval);
+  refreshInterval = setInterval(() => {
+    if (!refreshEnabled) return;
+    loadCheckedIn();
+    loadStats();
+  }, 10000);
 }
 
 function clearSearch() {

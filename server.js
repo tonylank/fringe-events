@@ -1346,6 +1346,19 @@ app.get('/api/checkin/:eventId/search', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Get all checked-in guests for live list
+app.get('/api/checkin/:eventId/checked-in', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT eg.id, eg.checked_in_at, eg.plus_one_name, eg.plus_one_checked_in_at,
+             g.first_name, g.last_name
+      FROM event_guests eg JOIN guests g ON g.id=eg.guest_id
+      WHERE eg.event_id=$1 AND eg.checked_in_at IS NOT NULL
+      ORDER BY eg.checked_in_at DESC`, [req.params.eventId]);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Check in a guest
 app.post('/api/checkin/:eventId/guests/:egId/checkin', async (req, res) => {
   try {
