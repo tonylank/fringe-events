@@ -1412,12 +1412,14 @@ async function openGuestHistory(guestId, guestName) {
   if (!events.length) {
     body = '<p style="color:var(--muted);font-size:13px">This guest has not been invited to any events yet.</p>';
   } else {
+    const thStyle = 'text-align:left;padding:8px 10px;border-bottom:2px solid var(--border);color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px';
+    const tdStyle = 'padding:10px;border-bottom:1px solid var(--border)';
     body = `<table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr>
-        <th style="text-align:left;padding:8px 10px;border-bottom:2px solid var(--border);color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Event</th>
-        <th style="text-align:left;padding:8px 10px;border-bottom:2px solid var(--border);color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Date</th>
-        <th style="text-align:left;padding:8px 10px;border-bottom:2px solid var(--border);color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">RSVP</th>
-        <th style="text-align:left;padding:8px 10px;border-bottom:2px solid var(--border);color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Attended</th>
+        <th style="${thStyle}">Event</th>
+        <th style="${thStyle}">Date</th>
+        <th style="${thStyle}">RSVP</th>
+        <th style="${thStyle}">Attended</th>
       </tr></thead>
       <tbody>${events.map(e => {
         const attended = e.checked_in_at
@@ -1427,13 +1429,39 @@ async function openGuestHistory(guestId, guestName) {
           : '—';
         const rsvpBadge = `<span class="badge badge-${e.status}">${e.status}</span>`;
         return `<tr>
-          <td style="padding:10px;border-bottom:1px solid var(--border)"><strong>${escH(e.name)}</strong></td>
-          <td style="padding:10px;border-bottom:1px solid var(--border)">${fmtDate(e.event_date)}</td>
-          <td style="padding:10px;border-bottom:1px solid var(--border)">${rsvpBadge}</td>
-          <td style="padding:10px;border-bottom:1px solid var(--border)">${attended}</td>
+          <td style="${tdStyle}"><strong>${escH(e.name)}</strong></td>
+          <td style="${tdStyle}">${fmtDate(e.event_date)}</td>
+          <td style="${tdStyle}">${rsvpBadge}</td>
+          <td style="${tdStyle}">${attended}</td>
         </tr>`;
       }).join('')}</tbody>
     </table>`;
+
+    // Dietary requirements history
+    const dietaryEntries = events.filter(e => e.dietary_requirements);
+    if (dietaryEntries.length) {
+      body += `<div style="margin-top:24px;padding-top:20px;border-top:2px solid var(--border)">
+        <h3 style="font-size:14px;color:#D97706;margin:0 0 12px;display:flex;align-items:center;gap:6px">🍽 Dietary Requirements</h3>
+        ${dietaryEntries.map(e => `
+          <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;margin-bottom:8px">
+            <div style="font-size:12px;color:var(--muted);margin-bottom:4px"><strong>${escH(e.name)}</strong> — ${fmtDate(e.event_date)}</div>
+            <div style="font-size:14px;color:var(--txt)">${escH(e.dietary_requirements)}</div>
+          </div>`).join('')}
+      </div>`;
+    }
+
+    // Accessibility needs history
+    const accessEntries = events.filter(e => e.accessibility_needs);
+    if (accessEntries.length) {
+      body += `<div style="margin-top:24px;padding-top:20px;border-top:2px solid var(--border)">
+        <h3 style="font-size:14px;color:#7C3AED;margin:0 0 12px;display:flex;align-items:center;gap:6px">♿ Accessibility Needs</h3>
+        ${accessEntries.map(e => `
+          <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;padding:12px 14px;margin-bottom:8px">
+            <div style="font-size:12px;color:var(--muted);margin-bottom:4px"><strong>${escH(e.name)}</strong> — ${fmtDate(e.event_date)}</div>
+            <div style="font-size:14px;color:var(--txt)">${escH(e.accessibility_needs)}</div>
+          </div>`).join('')}
+      </div>`;
+    }
   }
   showModal(`${guestName} — Event History`, body, [{label:'Close',fn:'closeModal',cls:'btn-sec'}]);
 }

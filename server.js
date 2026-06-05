@@ -1000,7 +1000,8 @@ app.get('/api/guests/:id/events', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`
       SELECT e.id, e.name, e.event_date, e.slug,
-             eg.status, eg.checked_in_at, eg.invitation_sent_at, eg.rsvp_code
+             eg.status, eg.checked_in_at, eg.invitation_sent_at, eg.rsvp_code,
+             eg.dietary_requirements, eg.accessibility_needs
       FROM event_guests eg
       JOIN events e ON e.id = eg.event_id
       WHERE eg.guest_id = $1
