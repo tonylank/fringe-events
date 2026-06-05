@@ -385,11 +385,7 @@ function renderRsvpPage(event, guest, eventGuest, questions, answers) {
     return `<div class="fg"><label>${esc(q.question_text)}${q.required?' *':''}</label><input type="text" name="q_${q.id}" value="${esc(ans)}"${q.required?' required':''}></div>`;
   }).join('');
 
-  const statusBanner = eventGuest.status === 'accepted'
-    ? `<div class="status-banner accepted">✓ You have confirmed attendance${eventGuest.attendance_type==='online'?' (online)':''}</div>${eventGuest.attendance_type==='online'&&event.online_link?`<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px;margin-top:10px;font-size:14px"><strong style="color:#065f46">💻 Your joining link:</strong><br><a href="${esc(event.online_link)}" style="color:#7C3AED;word-break:break-all">${esc(event.online_link)}</a></div>`:''}`
-    : eventGuest.status === 'declined'
-    ? `<div class="status-banner declined">✗ You have declined this invitation</div>`
-    : '';
+  const statusBanner = '';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -554,7 +550,32 @@ h1,h2,h3,.mini-card h2{font-family:'Playfair Display',Georgia,serif}
 
 
   ${canRsvp ? `
-  <div class="rsvp-section">
+  ${(eventGuest.status === 'accepted' || eventGuest.status === 'declined') ? `
+  <div class="rsvp-section" id="rsvpConfirm">
+    ${eventGuest.status === 'accepted' ? `
+    <div style="text-align:center;padding:8px 0 16px">
+      <div style="font-size:40px;margin-bottom:12px">✓</div>
+      <h2 style="color:#065f46;margin-bottom:8px">Thank you for your response</h2>
+      <p style="color:#666;font-size:15px;line-height:1.6">We look forward to seeing you at <strong>${esc(event.name)}</strong>.</p>
+    </div>
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px 18px;margin-bottom:16px">
+      <div style="font-size:13px;color:#065f46;font-weight:700;margin-bottom:8px">Your RSVP Details</div>
+      <div style="font-size:14px;color:#374151;line-height:1.8">
+        <strong>Status:</strong> Attending${eventGuest.attendance_type==='online'?' (online)':' (in person)'}<br>
+        ${eventGuest.plus_one_name ? `<strong>Plus one:</strong> ${esc(eventGuest.plus_one_name)}<br>` : ''}
+        ${eventGuest.dietary_requirements ? `<strong>Dietary:</strong> ${esc(eventGuest.dietary_requirements)}<br>` : ''}
+        ${eventGuest.accessibility_needs ? `<strong>Accessibility:</strong> ${esc(eventGuest.accessibility_needs)}<br>` : ''}
+      </div>
+    </div>` : `
+    <div style="text-align:center;padding:8px 0 16px">
+      <div style="font-size:40px;margin-bottom:12px">✗</div>
+      <h2 style="color:#991b1b;margin-bottom:8px">Thank you for your response</h2>
+      <p style="color:#666;font-size:15px;line-height:1.6">We're sorry you won't be joining us for <strong>${esc(event.name)}</strong>.</p>
+    </div>`}
+    <button class="submit-btn" style="background:#2D1B69" onclick="document.getElementById('rsvpConfirm').style.display='none';document.getElementById('rsvpEdit').style.display='block'">Edit / Update my RSVP</button>
+  </div>` : ''}
+
+  <div class="rsvp-section" id="rsvpEdit" style="${(eventGuest.status === 'accepted' || eventGuest.status === 'declined') ? 'display:none' : ''}">
     <h2>Your Response</h2>
     <form id="rf" onsubmit="doSubmit(event)">
       <div class="attend-btns">
@@ -640,7 +661,7 @@ async function doSubmit(e){
   });
   try{
     const r=await fetch('/rsvp/${eventGuest.rsvp_code}',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
-    if(r.ok){document.getElementById('ok').classList.add('vis');btn.textContent='Saved ✓';setTimeout(()=>location.reload(),1600);}
+    if(r.ok){document.getElementById('ok').classList.add('vis');btn.textContent='Saved ✓';setTimeout(()=>location.reload(),1200);}
     else{const j=await r.json();btn.disabled=false;btn.textContent='Save Response';alert(j.error||'Failed — please try again.');}
   }catch{btn.disabled=false;btn.textContent='Save Response';alert('Network error — please try again.');}
 }
