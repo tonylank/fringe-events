@@ -91,12 +91,16 @@ body{font-family:'DM Sans',-apple-system,sans-serif;background:#0f0720;min-heigh
 .toggle-knob{position:absolute;top:2px;left:2px;width:18px;height:18px;background:#fff;border-radius:50%;transition:transform .2s}
 .toggle-switch input:checked~.toggle-knob{transform:translateX(18px)}
 .checkedin-section{padding:12px 20px;max-width:600px;margin:0 auto}
-.checkedin-heading{font-size:13px;font-weight:700;color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;padding-top:12px;border-top:1px solid rgba(255,255,255,.08)}
-.ci-item{display:flex;align-items:center;gap:12px;padding:10px 14px;background:rgba(255,255,255,.06);border-radius:10px;margin-bottom:6px}
-.ci-avatar{width:34px;height:34px;border-radius:50%;background:var(--ok);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0}
-.ci-name{font-size:14px;font-weight:600;color:#fff;flex:1}
-.ci-time{font-size:12px;color:rgba(255,255,255,.5)}
-.ci-plus{font-size:12px;color:rgba(255,255,255,.4);margin-left:46px;margin-top:-4px;margin-bottom:4px}
+.ci-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:12px 0;border-top:1px solid rgba(255,255,255,.08)}
+.ci-heading{font-size:13px;font-weight:700;color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap}
+.ci-search{flex:1;min-width:120px;padding:8px 12px;border-radius:8px;border:none;font-size:13px;background:rgba(255,255,255,.1);color:#fff;outline:none}
+.ci-search::placeholder{color:rgba(255,255,255,.35)}
+.ci-sort{padding:6px 10px;border-radius:6px;border:none;font-size:12px;background:rgba(255,255,255,.12);color:rgba(255,255,255,.7);cursor:pointer;font-weight:600;white-space:nowrap}
+.ci-sort:hover,.ci-sort.active{background:rgba(255,255,255,.22);color:#fff}
+.ci-table{width:100%;border-collapse:collapse}
+.ci-table th{text-align:left;padding:6px 8px;font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid rgba(255,255,255,.1)}
+.ci-table td{padding:6px 8px;font-size:13px;color:rgba(255,255,255,.85);border-bottom:1px solid rgba(255,255,255,.05)}
+.ci-table .po-row td{font-size:12px;color:rgba(255,255,255,.45);padding:2px 8px 6px 30px;border-bottom:1px solid rgba(255,255,255,.05)}
 
 .success-flash{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--ok);color:#fff;padding:28px 40px;border-radius:16px;font-size:22px;font-weight:700;z-index:999;text-align:center;pointer-events:none;opacity:0;transition:opacity .2s;box-shadow:0 8px 40px rgba(0,0,0,.4)}
 .success-flash.show{opacity:1}
@@ -136,8 +140,13 @@ body{font-family:'DM Sans',-apple-system,sans-serif;background:#0f0720;min-heigh
     <div class="empty"><div class="empty-icon">🔍</div><div>Search for a guest to check them in</div></div>
   </div>
   <div class="checkedin-section" id="checkedinSection">
-    <div class="checkedin-heading" id="checkedinHeading">Checked In</div>
-    <div id="checkedinList"></div>
+    <div class="ci-toolbar">
+      <span class="ci-heading" id="ciHeading">Checked In (0)</span>
+      <input class="ci-search" id="ciSearch" type="text" placeholder="Filter checked-in…" oninput="renderCheckedIn()">
+      <button class="ci-sort active" id="sortTime" onclick="setCiSort('time')">Latest first</button>
+      <button class="ci-sort" id="sortName" onclick="setCiSort('name')">A–Z</button>
+    </div>
+    <table class="ci-table"><tbody id="ciTbody"></tbody></table>
   </div>
 </div>
 
@@ -313,27 +322,48 @@ function refreshAfterAction() {
   if (refreshEnabled) loadCheckedIn();
 }
 
+let checkedInData = [];
+let ciSort = 'time'; // 'time' or 'name'
+
 async function loadCheckedIn() {
   try {
     const r = await fetch(`/api/checkin/${eventId}/checked-in`);
-    const guests = await r.json();
-    const heading = document.getElementById('checkedinHeading');
-    heading.textContent = `Checked In (${guests.length})`;
-    const list = document.getElementById('checkedinList');
-    if (!guests.length) {
-      list.innerHTML = '<div style="color:rgba(255,255,255,.35);font-size:13px;padding:8px 0">No guests checked in yet</div>';
-      return;
-    }
-    list.innerHTML = guests.map(g => {
-      const initials = (g.first_name[0]||'') + (g.last_name[0]||'');
-      const poChecked = g.plus_one_name && g.plus_one_checked_in_at;
-      return `<div class="ci-item">
-        <div class="ci-avatar">${initials}</div>
-        <div class="ci-name">${escH(g.first_name)} ${escH(g.last_name)}</div>
-        <div class="ci-time">${fmtTime(g.checked_in_at)}</div>
-      </div>${poChecked ? `<div class="ci-plus">+ ${escH(g.plus_one_name)} — ${fmtTime(g.plus_one_checked_in_at)}</div>` : ''}`;
-    }).join('');
+    checkedInData = await r.json();
+    renderCheckedIn();
   } catch {}
+}
+
+function setCiSort(mode) {
+  ciSort = mode;
+  document.getElementById('sortTime').classList.toggle('active', mode === 'time');
+  document.getElementById('sortName').classList.toggle('active', mode === 'name');
+  renderCheckedIn();
+}
+
+function renderCheckedIn() {
+  const filter = (document.getElementById('ciSearch').value || '').toLowerCase();
+  let filtered = checkedInData;
+  if (filter) {
+    filtered = checkedInData.filter(g =>
+      (g.first_name + ' ' + g.last_name).toLowerCase().includes(filter) ||
+      (g.plus_one_name && g.plus_one_name.toLowerCase().includes(filter))
+    );
+  }
+  const sorted = [...filtered].sort((a, b) => {
+    if (ciSort === 'name') return (a.last_name + a.first_name).localeCompare(b.last_name + b.first_name);
+    return new Date(b.checked_in_at) - new Date(a.checked_in_at);
+  });
+
+  document.getElementById('ciHeading').textContent = `Checked In (${checkedInData.length}${filter ? ', showing ' + sorted.length : ''})`;
+  const tbody = document.getElementById('ciTbody');
+  if (!sorted.length) {
+    tbody.innerHTML = `<tr><td colspan="2" style="color:rgba(255,255,255,.35);font-size:13px;padding:12px 8px">${checkedInData.length ? 'No matches' : 'No guests checked in yet'}</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = sorted.map(g => {
+    const po = g.plus_one_name && g.plus_one_checked_in_at;
+    return `<tr><td>${escH(g.first_name)} ${escH(g.last_name)}</td><td style="text-align:right;color:rgba(255,255,255,.5)">${fmtTime(g.checked_in_at)}</td></tr>${po ? `<tr class="po-row"><td colspan="2">+ ${escH(g.plus_one_name)} — ${fmtTime(g.plus_one_checked_in_at)}</td></tr>` : ''}`;
+  }).join('');
 }
 
 function toggleRefresh(on) {
