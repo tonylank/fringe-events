@@ -344,10 +344,16 @@ tr:hover td{background:#fafafa}
         </div>
         <div class="search-row">
           <input class="search-input" id="guestSearch" placeholder="Search guests…" oninput="filterGuestTable()">
+          <select id="guestStatusFilter" onchange="filterGuestTable()" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;background:#fff;color:var(--txt);min-width:120px">
+            <option value="">All statuses</option>
+            <option value="pending">Pending</option>
+            <option value="accepted">Accepted</option>
+            <option value="declined">Declined</option>
+          </select>
           <button class="btn btn-warn btn-sm" onclick="sendInvitations()">📨 Send Invitations</button>
           <button class="btn btn-sec btn-sm" onclick="sendReminders()">🔔 Send Reminders</button>
           <button class="btn btn-sec btn-sm" onclick="refreshEmailStatuses()" title="Poll Resend API for latest email open/click status">↻ Refresh Email Status</button>
-          <button class="btn btn-sec btn-sm" onclick="exportGuestCSV()">↓ Export CSV</button>
+          <button class="btn btn-sec btn-sm" onclick="openExportGuestCSV()">↓ Export CSV</button>
         </div>
         <div class="card">
           <div class="tbl-wrap">
@@ -953,9 +959,12 @@ function renderGuestTable(guests) {
 
 function filterGuestTable() {
   const q = document.getElementById('guestSearch').value.toLowerCase();
-  if (!q) { renderGuestTable(allEventGuests); return; }
-  renderGuestTable(allEventGuests.filter(g =>
-    (g.first_name+' '+g.last_name+g.email+(g.company||'')).toLowerCase().includes(q)));
+  const status = document.getElementById('guestStatusFilter').value;
+  let filtered = allEventGuests;
+  if (status) filtered = filtered.filter(g => g.status === status);
+  if (q) filtered = filtered.filter(g =>
+    (g.first_name+' '+g.last_name+g.email+(g.company||'')).toLowerCase().includes(q));
+  renderGuestTable(filtered);
 }
 
 function toggleSelectAll() {
@@ -1175,9 +1184,27 @@ async function refreshEmailStatuses() {
   }
 }
 
-function exportGuestCSV() {
-  const guests = allEventGuests;
-  if (!guests.length) { toast('No guests to export','err'); return; }
+function openExportGuestCSV() {
+  if (!allEventGuests.length) { toast('No guests to export','err'); return; }
+  showModal('Export Guest List', `
+    <p style="font-size:14px;color:var(--txt);margin-bottom:16px">Choose which guests to include in the CSV export.</p>
+    <div class="fg">
+      <label>Filter by status</label>
+      <select id="exportStatusFilter" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:7px;font-size:14px">
+        <option value="">All guests (${allEventGuests.length})</option>
+        <option value="pending">Pending (${allEventGuests.filter(g=>g.status==='pending').length})</option>
+        <option value="accepted">Accepted (${allEventGuests.filter(g=>g.status==='accepted').length})</option>
+        <option value="declined">Declined (${allEventGuests.filter(g=>g.status==='declined').length})</option>
+      </select>
+    </div>`,
+    [{label:'Cancel',fn:'closeModal',cls:'btn-sec'},{label:'↓ Download CSV',fn:'doExportGuestCSV()',cls:'btn-pri'}]);
+}
+
+function doExportGuestCSV() {
+  const status = document.getElementById('exportStatusFilter').value;
+  let guests = allEventGuests;
+  if (status) guests = guests.filter(g => g.status === status);
+  if (!guests.length) { toast('No guests match that filter','err'); return; }
   const headers = ['First Name','Last Name','Email','Company','Status','Checked In','Invited','RSVP Code','Plus One','Dietary'];
   const rows = guests.map(g => [
     g.first_name, g.last_name, g.email, g.company||'',
@@ -1188,8 +1215,11 @@ function exportGuestCSV() {
   const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'}));
-  a.download = `guests-event-${currentEventId}.csv`;
+  const label = status || 'all';
+  a.download = `guests-${label}-event-${currentEventId}.csv`;
   a.click();
+  closeModal();
+  toast(`Exported ${guests.length} guests`, 'ok');
 }
 
 // ── Questions ──────────────────────────────────────────────────────────────
