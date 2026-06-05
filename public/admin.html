@@ -480,6 +480,9 @@ tr:hover td{background:#fafafa}
     <div class="view" id="viewTags">
       <div class="page-head">
         <h1>Tag Manager</h1>
+        <div class="page-head-right">
+          <button class="btn btn-pri" onclick="openCreateTag()">+ New Tag</button>
+        </div>
       </div>
       <p style="color:var(--muted);font-size:14px;margin-bottom:20px">Manage tags across your guest database. Rename, merge or delete tags in bulk.</p>
       <div class="card">
@@ -1698,6 +1701,19 @@ function updateMergeTargetDropdown() {
   const available = allTagsData.filter(t => !mergeSelectedTags.has(t.name));
   sel.innerHTML = '<option value="">Select target tag…</option>' +
     available.map(t => `<option value="${escH(t.name)}"${t.name===prev?' selected':''}>${escH(t.name)} (${t.count})</option>`).join('');
+}
+
+function openCreateTag() {
+  showModal('Create Tag', `
+    <div class="fg"><label>Tag name</label><input id="newTagInput" type="text" placeholder="e.g. sponsor, media, vip"></div>`,
+    [{label:'Cancel',fn:'closeModal',cls:'btn-sec'},{label:'Create',fn:'doCreateTag()',cls:'btn-pri'}]);
+}
+
+async function doCreateTag() {
+  const name = document.getElementById('newTagInput').value.trim();
+  if (!name) { toast('Tag name required', 'err'); return; }
+  const r = await apiFetch('/api/tags', { method:'POST', body: { name } });
+  if (r) { closeModal(); toast(`Tag "${name}" created`, 'ok'); loadTagManager(); loadMasterTagBar(); }
 }
 
 function openRenameTag(tag) {

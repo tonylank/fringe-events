@@ -99,6 +99,12 @@ async function migrate() {
         sort_order INTEGER DEFAULT 0
       );
 
+      CREATE TABLE IF NOT EXISTS tags (
+        id SERIAL PRIMARY KEY,
+        name TEXT UNIQUE NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
       CREATE TABLE IF NOT EXISTS venues (
         id SERIAL PRIMARY KEY,
         name TEXT NOT NULL,
@@ -912,9 +918,21 @@ app.get('/api/tags', requireAuth, async (req, res) => {
     const { rows } = await pool.query(`SELECT tags FROM guests WHERE tags IS NOT NULL AND tags <> ''`);
     const counts = {};
     rows.forEach(r => r.tags.split(',').forEach(t => { const s = t.trim(); if (s) counts[s] = (counts[s]||0) + 1; }));
+    // Include standalone tags from tags table (0-guest tags still appear)
+    const { rows: standaloneTags } = await pool.query('SELECT name FROM tags');
+    standaloneTags.forEach(t => { if (!counts[t.name]) counts[t.name] = 0; });
     const tags = Object.entries(counts).map(([name, count]) => ({ name, count }))
       .sort((a, b) => a.name.localeCompare(b.name));
     res.json(tags);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/tags', requireAuth, async (req, res) => {
+  const { name } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: 'Tag name required' });
+  try {
+    await pool.query('INSERT INTO tags (name) VALUES ($1) ON CONFLICT (name) DO NOTHING', [name.trim()]);
+    res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
