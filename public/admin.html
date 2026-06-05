@@ -1784,10 +1784,21 @@ async function loadVenues() {
         ${v.contact_name ? '<br>👤 ' + escH(v.contact_name) : ''}
         ${v.hire_price ? '<br>💷 ' + escH(v.hire_price) : ''}
       </div>
-      <div class="venue-card-stats">
+      <div class="venue-card-stats" style="justify-content:space-between;align-items:center">
         <div class="venue-card-stat"><strong>${v.event_count||0}</strong> events</div>
+        <button class="btn btn-sec btn-sm" onclick="event.stopPropagation();openVenueHistoryModal(${v.id},'${escH(v.name)}')">History</button>
       </div>
     </div>`).join('');
+}
+
+async function openVenueHistoryModal(venueId, venueName) {
+  const events = await apiFetch(`/api/venues/${venueId}/history`) || [];
+  const body = events.length
+    ? `<table style="width:100%;font-size:14px"><thead><tr><th style="text-align:left;padding:8px 6px;border-bottom:1px solid var(--border)">Event</th><th style="text-align:left;padding:8px 6px;border-bottom:1px solid var(--border)">Date</th><th style="text-align:left;padding:8px 6px;border-bottom:1px solid var(--border)">Status</th></tr></thead><tbody>${events.map(e =>
+      `<tr><td style="padding:8px 6px;border-bottom:1px solid var(--border)"><strong>${escH(e.name)}</strong></td><td style="padding:8px 6px;border-bottom:1px solid var(--border)">${fmtDate(e.event_date)}</td><td style="padding:8px 6px;border-bottom:1px solid var(--border)">${escH(e.status||'draft')}</td></tr>`
+    ).join('')}</tbody></table>`
+    : '<p style="color:var(--muted);font-size:14px">No events held at this venue yet.</p>';
+  showModal(`Event History — ${venueName}`, body, [{label:'Close',fn:'closeModal',cls:'btn-sec'}]);
 }
 
 async function openVenue(id) {
