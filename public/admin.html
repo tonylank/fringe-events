@@ -305,6 +305,13 @@ tr:hover td{background:#fafafa}
               <div class="fg"><label>Allow Plus One</label>
                 <select id="evPlusOne"><option value="false">No</option><option value="true">Yes</option></select></div>
               <div class="fg"><label>Check-in PIN</label><input id="evPin" type="text" placeholder="4-digit PIN for check-in app"></div>
+              <div class="fg span2" id="checkinUrlRow" style="display:none">
+                <label>Check-in URL</label>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <input id="checkinUrl" type="text" readonly style="flex:1;background:#f9fafb;color:var(--txt);cursor:text">
+                  <button class="btn btn-sec btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('checkinUrl').value);toast('Copied','ok')">Copy</button>
+                </div>
+              </div>
               <div class="fg span2"><label>Hashtags</label><input id="evHashtags" type="text" placeholder="#EdFringe #MyEvent"></div>
               <div class="fg span2"><label>Accessibility Information <span style="font-weight:400;color:var(--muted)">(shown to guests on their RSVP page)</span></label><textarea id="evAccessibility" rows="4" placeholder="Step-free access via main entrance, accessible toilets on ground floor, hearing loop available…"></textarea></div>
               <div class="fg span2" style="background:#f5f3ff;border:1.5px solid #e0d9f5;border-radius:8px;padding:14px">
@@ -745,6 +752,14 @@ async function openEvent(id) {
   document.getElementById('evPlusOne').value = ev.allow_plus_one ? 'true' : 'false';
   document.getElementById('evPin').value = ev.check_in_pin || '';
   document.getElementById('evHashtags').value = ev.hashtags || '';
+  // Check-in URL (only show for saved events with a slug)
+  const checkinRow = document.getElementById('checkinUrlRow');
+  if (ev.slug) {
+    document.getElementById('checkinUrl').value = window.location.origin + '/checkin/' + ev.slug;
+    checkinRow.style.display = '';
+  } else {
+    checkinRow.style.display = 'none';
+  }
   document.getElementById('evAllowOnline').checked = !!ev.allow_online;
   document.getElementById('evOnlineLink').value = ev.online_link || '';
   toggleOnlineLink();
