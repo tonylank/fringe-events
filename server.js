@@ -1289,6 +1289,9 @@ h1{font-family:'Playfair Display',serif;color:#2D1B69;font-size:22px;margin-bott
     <div class="fg"><label>First Name *</label><input id="fn" required></div>
     <div class="fg"><label>Last Name *</label><input id="ln" required></div>
     <div class="fg"><label>Email *</label><input id="em" type="email" required></div>
+    ${event.allow_plus_one?`<div class="fg"><label>Plus One Name <span style="font-weight:400;color:#999">(optional)</span></label><input id="po"></div>`:''}
+    <div class="fg"><label>Dietary Requirements <span style="font-weight:400;color:#999">(optional)</span></label><input id="diet" placeholder="e.g. vegetarian, nut allergy…"></div>
+    <div class="fg"><label>Accessibility Needs <span style="font-weight:400;color:#999">(optional)</span></label><textarea id="acc" rows="2" style="width:100%;padding:10px 14px;border:1.5px solid #ddd;border-radius:6px;font-size:15px;font-family:inherit" placeholder="Let us know of any specific requirements…"></textarea></div>
     <button class="btn" id="sb" type="submit">RSVP Now</button>
   </form>
   <div class="msg" id="msg"></div>
@@ -1300,7 +1303,8 @@ async function doRsvp(e){
   const msg=document.getElementById('msg');msg.className='msg';msg.style.display='none';
   try{
     const r=await fetch('/rsvp/open/${event.slug}',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({first_name:document.getElementById('fn').value.trim(),last_name:document.getElementById('ln').value.trim(),email:document.getElementById('em').value.trim()})});
+      body:JSON.stringify({first_name:document.getElementById('fn').value.trim(),last_name:document.getElementById('ln').value.trim(),email:document.getElementById('em').value.trim(),
+        plus_one_name:(document.getElementById('po')||{}).value||'',dietary:(document.getElementById('diet')||{}).value||'',accessibility_needs:(document.getElementById('acc')||{}).value||''})});
     const j=await r.json();
     if(r.ok){msg.className='msg ok';msg.textContent='Thank you! You have been registered. Check your email for confirmation.';msg.style.display='block';btn.textContent='Registered ✓';}
     else{msg.className='msg err';msg.textContent=j.error||'Something went wrong';msg.style.display='block';btn.disabled=false;btn.textContent='RSVP Now';}
@@ -1311,7 +1315,7 @@ async function doRsvp(e){
 });
 
 app.post('/rsvp/open/:slug', async (req, res) => {
-  const { first_name, last_name, email } = req.body;
+  const { first_name, last_name, email, plus_one_name, dietary, accessibility_needs } = req.body;
   if (!first_name || !last_name || !email) return res.status(400).json({ error: 'All fields are required' });
   try {
     const { rows } = await pool.query('SELECT * FROM events WHERE slug=$1', [req.params.slug]);
@@ -1331,8 +1335,9 @@ app.post('/rsvp/open/:slug', async (req, res) => {
     // Add to event (skip if already there)
     const code = genCode();
     const { rowCount } = await pool.query(
-      'INSERT INTO event_guests (event_id,guest_id,rsvp_code,status) VALUES ($1,$2,$3,$4) ON CONFLICT (event_id,guest_id) DO NOTHING',
-      [event.id, guest.id, code, 'accepted']
+      `INSERT INTO event_guests (event_id,guest_id,rsvp_code,status,plus_one_name,dietary_requirements,accessibility_needs)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (event_id,guest_id) DO NOTHING`,
+      [event.id, guest.id, code, 'accepted', plus_one_name||null, dietary||null, accessibility_needs||null]
     );
     if (!rowCount) return res.json({ ok: true, message: 'Already registered' });
 
