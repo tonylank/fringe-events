@@ -501,7 +501,9 @@ tr:hover td{background:#fafafa}
             </div>
             <div style="flex:1;min-width:160px">
               <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Merge into</label>
-              <input id="mergeTarget" type="text" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:7px;font-size:14px" placeholder="Target tag name">
+              <select id="mergeTarget" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:7px;font-size:14px;background:var(--bg);color:var(--txt)">
+                <option value="">Select target tag…</option>
+              </select>
             </div>
             <button class="btn btn-pri btn-sm" onclick="doMergeTags()">Merge</button>
           </div>
@@ -1676,6 +1678,7 @@ async function loadTagManager() {
 function toggleMergeTag(tag, on) {
   if (on) mergeSelectedTags.add(tag); else mergeSelectedTags.delete(tag);
   updateMergeSourceDisplay();
+  updateMergeTargetDropdown();
 }
 
 function updateMergeSourceDisplay() {
@@ -1687,6 +1690,14 @@ function updateMergeSourceDisplay() {
   el.innerHTML = [...mergeSelectedTags].map(t =>
     `<span class="tag-chip on" style="pointer-events:none;font-size:12px;padding:3px 10px">${escH(t)}</span>`
   ).join('');
+}
+
+function updateMergeTargetDropdown() {
+  const sel = document.getElementById('mergeTarget');
+  const prev = sel.value;
+  const available = allTagsData.filter(t => !mergeSelectedTags.has(t.name));
+  sel.innerHTML = '<option value="">Select target tag…</option>' +
+    available.map(t => `<option value="${escH(t.name)}"${t.name===prev?' selected':''}>${escH(t.name)} (${t.count})</option>`).join('');
 }
 
 function openRenameTag(tag) {
@@ -1723,7 +1734,7 @@ async function doMergeTags() {
   const sources = [...mergeSelectedTags];
   const target = document.getElementById('mergeTarget').value.trim();
   if (!sources.length) { toast('Select tags to merge using the checkboxes', 'err'); return; }
-  if (!target) { toast('Enter a target tag name', 'err'); return; }
+  if (!target) { toast('Select a target tag', 'err'); return; }
   if (!confirm(`Merge ${sources.map(s=>'"'+s+'"').join(', ')} into "${target}"?`)) return;
   const r = await apiFetch('/api/tags/merge', { method:'POST', body: { sources, target } });
   if (r) {
