@@ -532,9 +532,8 @@ h1,h2,h3,.mini-card h2{font-family:'Playfair Display',Georgia,serif}
       ${event.dress_code?`<br>👔 Dress code: <strong>${esc(event.dress_code)}</strong>`:''}
       ${event.accessibility_info?`<br><a href="#" style="font-size:13px;color:#7C3AED;text-decoration:underline;text-underline-offset:2px" onclick="event.preventDefault();document.getElementById('accessModal').classList.add('open')">Accessibility information</a>`:''}
     </div>
-    ${event.description?`<div class="desc">${esc(event.description).replace(/\n/g,'<br>')}</div>`:''}
-    <p style="font-size:15px;color:#444">Dear <strong>${esc(guest.first_name)} ${esc(guest.last_name)}</strong>,</p>
-    ${statusBanner}
+    <p style="font-size:16px;color:#444;margin-bottom:8px">Dear <strong>${esc(guest.first_name)}</strong>,</p>
+    <p style="font-size:15px;color:#444;line-height:1.7">${esc(event.description||'You are cordially invited to join us for this special event.').replace(/\n/g,'<br>')}</p>
     ${event.rsvp_deadline?`<p style="font-size:13px;color:#888;margin-top:10px">Please respond by <strong>${new Date(event.rsvp_deadline).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}</strong></p>`:''}
   </div>
 
