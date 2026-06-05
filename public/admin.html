@@ -1034,7 +1034,6 @@ function openAddGuest() {
   loadPickerGuests();
 }
 
-let pickerSelected = null;
 async function loadPickerGuests(q) {
   const url = q ? `/api/guests?q=${encodeURIComponent(q)}` : '/api/guests';
   const guests = await apiFetch(url) || [];
@@ -1189,11 +1188,12 @@ async function doAddBuilderGuests() {
   }
 }
 
-// Close builder tag dropdown on outside click
+// Close any open tag dropdown on outside click
 document.addEventListener('click', e => {
-  const btn = document.getElementById('bldrTagBtn');
-  const panel = document.getElementById('bldrTagPanel');
-  if (btn && panel && !btn.contains(e.target) && !panel.contains(e.target)) panel.style.display = 'none';
+  [['tagDropBtn','tagDropPanel'],['bldrTagBtn','bldrTagPanel']].forEach(([btnId,panelId]) => {
+    const btn = document.getElementById(btnId), panel = document.getElementById(panelId);
+    if (btn && panel && !btn.contains(e.target) && !panel.contains(e.target)) panel.style.display = 'none';
+  });
 });
 
 async function sendInvitations() {
@@ -1433,14 +1433,6 @@ function updateTagDropLabel() {
   document.getElementById('tagDropLabel').textContent = checked.length ? checked.join(', ') : 'All tags';
 }
 
-// Close tag dropdown when clicking outside
-document.addEventListener('click', e => {
-  if (!document.getElementById('tagDropBtn')?.contains(e.target) &&
-      !document.getElementById('tagDropPanel')?.contains(e.target)) {
-    const panel = document.getElementById('tagDropPanel');
-    if (panel) panel.style.display = 'none';
-  }
-});
 
 async function populateExportEventFilter() {
   const sel = document.getElementById('exportEventFilter');

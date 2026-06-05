@@ -388,7 +388,6 @@ function renderRsvpPage(event, guest, eventGuest, questions, answers) {
     return `<div class="fg"><label>${esc(q.question_text)}${q.required?' *':''}</label><input type="text" name="q_${q.id}" value="${esc(ans)}"${q.required?' required':''}></div>`;
   }).join('');
 
-  const statusBanner = '';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -432,9 +431,6 @@ h1,h2,h3,.mini-card h2{font-family:'Playfair Display',Georgia,serif}
 .card h1{font-size:24px;color:#2D1B69;margin-bottom:8px}
 .meta{color:#666;font-size:15px;line-height:1.7;margin-bottom:16px}
 .desc{color:#444;font-size:15px;line-height:1.7;border-top:1px solid #eee;padding-top:16px;margin-bottom:16px}
-.status-banner{padding:12px 16px;border-radius:8px;font-size:14px;font-weight:700;margin-bottom:16px}
-.status-banner.accepted{background:#d1fae5;color:#065f46}
-.status-banner.declined{background:#fee2e2;color:#991b1b}
 .rsvp-section{background:#fff;border-radius:12px;padding:28px 32px;box-shadow:0 4px 20px rgba(0,0,0,.08);margin-bottom:20px}
 .rsvp-section h2{font-size:18px;color:#2D1B69;margin-bottom:20px}
 .attend-btns{display:flex;gap:12px;margin-bottom:20px}
@@ -1630,8 +1626,23 @@ app.get('/api/checkin-page-init', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ─── Resend Webhook ───────────────────────────────────────────────────────────
+// ─── Email Status Tracking ────────────────────────────────────────────────────
 const EMAIL_STATUS_PRIORITY = { sent:0, delayed:1, delivered:2, opened:3, clicked:4, complained:5, bounced:6 };
+
+const RESEND_EVENT_TO_STATUS = {
+  'email.sent':'sent','email.delivered':'delivered','email.delivery_delayed':'delayed',
+  'email.bounced':'bounced','email.complained':'complained','email.opened':'opened','email.clicked':'clicked',
+};
+
+// Reusable SQL: only update email_status if new status has higher priority
+const EMAIL_STATUS_UPDATE_SQL = `
+  UPDATE event_guests SET email_status=$1, email_status_at=NOW()
+  WHERE %FILTER%
+    AND (email_status IS NULL
+      OR COALESCE((CASE email_status
+        WHEN 'sent' THEN 0 WHEN 'delayed' THEN 1 WHEN 'delivered' THEN 2
+        WHEN 'opened' THEN 3 WHEN 'clicked' THEN 4 WHEN 'complained' THEN 5
+        WHEN 'bounced' THEN 6 ELSE -1 END), -1) < $%PRIO_PARAM%)`;
 
 function verifyResendWebhook(req) {
   const secret = process.env.RESEND_WEBHOOK_SECRET;
@@ -1648,32 +1659,15 @@ function verifyResendWebhook(req) {
 }
 
 app.post('/webhooks/resend', async (req, res) => {
-  if (!verifyResendWebhook(req)) {
-    console.log('[WEBHOOK] Resend signature verification failed');
-    return res.status(401).json({ error: 'Invalid signature' });
-  }
+  if (!verifyResendWebhook(req)) return res.status(401).json({ error: 'Invalid signature' });
   const { type, data } = req.body;
-  console.log('[WEBHOOK] Resend event:', type, 'email_id:', data?.email_id);
   if (!type || !data?.email_id) return res.status(200).json({ ok: true });
-  const statusMap = {
-    'email.sent': 'sent', 'email.delivered': 'delivered', 'email.delivery_delayed': 'delayed',
-    'email.bounced': 'bounced', 'email.complained': 'complained',
-    'email.opened': 'opened', 'email.clicked': 'clicked',
-  };
-  const newStatus = statusMap[type];
+  const newStatus = RESEND_EVENT_TO_STATUS[type];
   if (!newStatus) return res.status(200).json({ ok: true });
   const newPriority = EMAIL_STATUS_PRIORITY[newStatus] ?? -1;
   try {
-    const result = await pool.query(`
-      UPDATE event_guests SET email_status=$1, email_status_at=NOW()
-      WHERE resend_email_id=$2
-        AND (email_status IS NULL
-          OR COALESCE((CASE email_status
-            WHEN 'sent' THEN 0 WHEN 'delayed' THEN 1 WHEN 'delivered' THEN 2
-            WHEN 'opened' THEN 3 WHEN 'clicked' THEN 4 WHEN 'complained' THEN 5
-            WHEN 'bounced' THEN 6 ELSE -1 END), -1) < $3)`,
-      [newStatus, data.email_id, newPriority]);
-    console.log('[WEBHOOK] Updated', result.rowCount, 'guest(s) to status:', newStatus);
+    const sql = EMAIL_STATUS_UPDATE_SQL.replace('%FILTER%', 'resend_email_id=$2').replace('%PRIO_PARAM%', '3');
+    await pool.query(sql, [newStatus, data.email_id, newPriority]);
     res.status(200).json({ ok: true });
   } catch (e) {
     console.error('[WEBHOOK] Error:', e.message);
@@ -1692,10 +1686,11 @@ app.post('/api/events/:id/refresh-email-statuses', requireAuth, async (req, res)
   );
   if (!rows.length) return res.json({ updated: 0 });
 
-  const resendStatusMap = {
-    sent: 'sent', delivered: 'delivered', delivery_delayed: 'delayed',
-    bounced: 'bounced', complained: 'complained', opened: 'opened', clicked: 'clicked',
+  const RESEND_LAST_EVENT_MAP = {
+    sent:'sent', delivered:'delivered', delivery_delayed:'delayed',
+    bounced:'bounced', complained:'complained', opened:'opened', clicked:'clicked',
   };
+  const sql = EMAIL_STATUS_UPDATE_SQL.replace('%FILTER%', 'id=$2').replace('%PRIO_PARAM%', '3');
 
   let updated = 0;
   for (const eg of rows) {
@@ -1705,20 +1700,10 @@ app.post('/api/events/:id/refresh-email-statuses', requireAuth, async (req, res)
       });
       if (!r.ok) continue;
       const j = await r.json();
-      // last_event is the most recent event type e.g. "opened"
-      const rawStatus = j.last_event;
-      const newStatus = resendStatusMap[rawStatus];
+      const newStatus = RESEND_LAST_EVENT_MAP[j.last_event];
       if (!newStatus) continue;
       const newPriority = EMAIL_STATUS_PRIORITY[newStatus] ?? -1;
-      const upd = await pool.query(`
-        UPDATE event_guests SET email_status=$1, email_status_at=NOW()
-        WHERE id=$2
-          AND (email_status IS NULL
-            OR COALESCE((CASE email_status
-              WHEN 'sent' THEN 0 WHEN 'delayed' THEN 1 WHEN 'delivered' THEN 2
-              WHEN 'opened' THEN 3 WHEN 'clicked' THEN 4 WHEN 'complained' THEN 5
-              WHEN 'bounced' THEN 6 ELSE -1 END), -1) < $3)`,
-        [newStatus, eg.id, newPriority]);
+      const upd = await pool.query(sql, [newStatus, eg.id, newPriority]);
       if (upd.rowCount) updated++;
     } catch (e) {
       console.error('[REFRESH] Error fetching', eg.resend_email_id, e.message);
